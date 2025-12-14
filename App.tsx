@@ -1,28 +1,47 @@
 import React from "react";
 
-/**
- * App principal MUSCLEPRO
- * IA desactivada temporalmente para evitar crash en navegador
- * (la IA se debe ejecutar solo vía backend / API)
- */
-
-export default function App() {
+function App() {
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center">
-      <h1 className="text-3xl font-bold tracking-wide">
+    <div
+      style={{
+        minHeight: "100vh",
+        backgroundColor: "#000000",
+        color: "#ffffff",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        textAlign: "center",
+        padding: "20px",
+      }}
+    >
+      <h1 style={{ fontSize: "32px", fontWeight: "700" }}>
         MUSCLEPRO
       </h1>
 
-      <p className="text-gray-400 mt-4 text-center max-w-md">
-        Plataforma en línea correctamente.<br />
-        El asistente IA será habilitado vía backend en la siguiente fase.
+      <p style={{ marginTop: "16px", color: "#9CA3AF", maxWidth: "420px" }}>
+        Plataforma cargada correctamente.
+        <br />
+        El asistente de inteligencia artificial será habilitado
+        en la siguiente fase desde backend seguro.
       </p>
 
-      <div className="mt-8 px-6 py-3 rounded-lg bg-zinc-900 border border-zinc-800">
-        <span className="text-sm text-green-400">
-          ✔ App cargada sin errores
-        </span>
+      <div
+        style={{
+          marginTop: "32px",
+          padding: "12px 20px",
+          borderRadius: "8px",
+          backgroundColor: "#111827",
+          border: "1px solid #1F2937",
+          color: "#22C55E",
+          fontSize: "14px",
+        }}
+      >
+        ✔ Aplicación React funcionando sin errores
       </div>
     </div>
   );
 }
+
+export default App;
