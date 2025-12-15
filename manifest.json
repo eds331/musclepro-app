@@ -3,17 +3,17 @@
   "name": "MUSCLEPRO Training App",
   "icons": [
     {
-      "src": "musclepro_logo.png",
+      "src": "/assets/musclepro_logo.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "musclepro_logo.png",
+      "src": "/assets/musclepro_logo.png",
       "type": "image/png",
       "sizes": "512x512"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
   "theme_color": "#050505",
   "background_color": "#050505",
