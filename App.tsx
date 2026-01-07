@@ -10,11 +10,11 @@ import { Login } from './components/Login';
 import { PersistenceService } from './services/persistenceService';
 import { INITIAL_USER } from './services/mockData';
 import { User, WorkoutSession, Badge, DailyLog, UserRole } from './types';
-import { Dumbbell, Loader2, CloudCheck, CloudAlert, CloudLightning, ShieldCheck } from 'lucide-react';
+import { Dumbbell, Loader2, CloudCheck, CloudAlert, CloudLightning, Wifi, Database } from 'lucide-react';
 
-const STORAGE_KEY = 'musclepro_v6_local_cache';
-const AUTH_KEY = 'musclepro_v6_session';
-const EMAIL_KEY = 'musclepro_v6_email';
+const STORAGE_KEY = 'musclepro_v7_local';
+const AUTH_KEY = 'musclepro_v7_auth';
+const EMAIL_KEY = 'musclepro_v7_email';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -24,69 +24,64 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
   
-  // CRÍTICO: Ref para evitar que el auto-guardado se dispare antes de cargar la nube
-  const isAppReady = useRef(false);
+  // EL "BLOQUEO MAESTRO": Evita que la app guarde datos vacíos antes de descargar la nube
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. CARGA INICIAL (SOLO AL ARRANCAR O RECARGAR)
+  // 1. SECUENCIA DE ARRANQUE CRÍTICA
   useEffect(() => {
-    const initApp = async () => {
+    const startup = async () => {
       const sessionActive = localStorage.getItem(AUTH_KEY);
       const savedEmail = localStorage.getItem(EMAIL_KEY);
       
       if (sessionActive === 'true' && savedEmail) {
         setIsAuthenticated(true);
+        console.log("[App] Intentando descarga de Nube para:", savedEmail);
         
-        // Descarga obligatoria de la nube antes de mostrar nada
-        const remoteUser = await PersistenceService.loadFromCloud(savedEmail);
-        
-        if (remoteUser) {
-          console.log("[App] Perfil remoto cargado con éxito.");
-          setUser(remoteUser);
+        const remoteData = await PersistenceService.loadFromCloud(savedEmail);
+        if (remoteData) {
+          console.log("[App] ✅ Sincronización con Nube Exitosa.");
+          setUser(remoteData);
         } else {
-          // Si no hay nube, intentar local
-          const localData = localStorage.getItem(STORAGE_KEY);
-          if (localData) setUser(JSON.parse(localData));
+          console.log("[App] ⚠️ No hay datos en nube, usando caché local.");
+          const local = localStorage.getItem(STORAGE_KEY);
+          if (local) setUser(JSON.parse(local));
         }
       }
       
-      // Marcamos la app como lista para empezar a sincronizar cambios
-      isAppReady.current = true;
+      setIsDataLoaded(true);
       setLoading(false);
     };
-    
-    initApp();
+    startup();
   }, []);
 
-  // 2. MOTOR DE AUTO-GUARDADO (Solo se activa si isAppReady es true)
+  // 2. MOTOR DE AUTO-SINCRO (Solo corre si isDataLoaded es TRUE)
   useEffect(() => {
-    if (isAuthenticated && isAppReady.current && !loading) {
-      // Guardado local preventivo
+    if (isAuthenticated && isDataLoaded && !loading) {
+      // 1. Guardar local (inmediato)
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
 
-      // Sincronización Remota Debounced
+      // 2. Debounce para la nube (para no saturar la API)
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       
       syncTimeoutRef.current = setTimeout(async () => {
         setSyncStatus('syncing');
         const success = await PersistenceService.saveToCloud(user);
         setSyncStatus(success ? 'synced' : 'error');
-      }, 2000); 
+      }, 2500); 
     }
-  }, [user, isAuthenticated, loading]);
+  }, [user, isAuthenticated, isDataLoaded, loading]);
 
   const handleLogin = async (email: string) => {
     setLoading(true);
     localStorage.setItem(EMAIL_KEY, email);
     localStorage.setItem(AUTH_KEY, 'true');
     
-    // Al loguear, forzamos descarga de nube
-    const remoteUser = await PersistenceService.loadFromCloud(email);
-    
-    if (remoteUser) {
-      setUser(remoteUser);
+    // Al entrar, intentamos descargar de inmediato
+    const remoteData = await PersistenceService.loadFromCloud(email);
+    if (remoteData) {
+      setUser(remoteData);
     } else {
-      // Nuevo usuario
       const newUser = { ...INITIAL_USER, email, username: email.split('@')[0] };
       if (email.toLowerCase() === 'ed.sanhuezag@gmail.com') {
         newUser.role = UserRole.ADMIN;
@@ -97,12 +92,12 @@ function App() {
     }
     
     setIsAuthenticated(true);
-    isAppReady.current = true; // Importante: activar el ready al loguear
+    setIsDataLoaded(true);
     setLoading(false);
   };
 
   const handleLogout = () => {
-    if (confirm("Se cerrará la sesión. Tus datos están sincronizados globalmente.")) {
+    if (confirm("Se cerrará la sesión. Tus datos están seguros en la nube global.")) {
       setIsAuthenticated(false);
       localStorage.clear();
       window.location.reload();
@@ -136,16 +131,18 @@ function App() {
     return (
       <div className="min-h-screen bg-dark-950 flex flex-col items-center justify-center p-6 text-center">
          <div className="relative mb-12">
-            <div className="absolute inset-0 bg-brand-500/30 blur-[80px] animate-pulse rounded-full"></div>
+            <div className="absolute inset-0 bg-brand-500/30 blur-[100px] animate-pulse rounded-full"></div>
             <Dumbbell className="text-brand-500 relative z-10 animate-bounce" size={80} />
          </div>
-         <h1 className="text-4xl font-black text-white italic tracking-tighter mb-6">MUSCLE<span className="text-brand-500">PRO</span></h1>
+         <h1 className="text-4xl font-black text-white italic tracking-tighter mb-8">MUSCLE<span className="text-brand-500">PRO</span></h1>
          <div className="flex flex-col items-center gap-4">
-            <div className="flex items-center gap-3 bg-dark-900 border border-dark-800 px-8 py-4 rounded-2xl shadow-2xl">
-                <Loader2 size={20} className="animate-spin text-brand-500" />
-                <span className="text-xs text-white font-black uppercase tracking-[0.2em]">Conectando con Servidor Global...</span>
+            <div className="flex items-center gap-4 bg-dark-900 border border-dark-800 px-10 py-5 rounded-[2rem] shadow-2xl">
+                <Loader2 size={24} className="animate-spin text-brand-500" />
+                <div className="text-left">
+                  <div className="text-[10px] text-white font-black uppercase tracking-[0.2em]">Conexión Global Establecida</div>
+                  <div className="text-[9px] text-dark-500 font-bold uppercase">Descargando Perfil Maestro...</div>
+                </div>
             </div>
-            <p className="text-dark-600 text-[10px] font-bold uppercase tracking-widest">Asegurando integridad de tus datos</p>
          </div>
       </div>
     );
@@ -198,8 +195,8 @@ function App() {
                 <h2 className="text-3xl font-black text-white mb-1 italic tracking-tighter uppercase">{user.username}</h2>
                 <p className="text-dark-500 font-bold tracking-widest text-[10px] uppercase mb-8">{user.email}</p>
                 
-                {/* INDICADOR DE NUBE REAL */}
-                <div className={`flex items-center justify-center gap-2 mb-8 py-2 px-6 rounded-full w-fit mx-auto border transition-all ${
+                {/* STATUS BAR DE NUBE */}
+                <div className={`flex items-center justify-center gap-2 mb-8 py-2.5 px-6 rounded-full w-fit mx-auto border transition-all ${
                   syncStatus === 'synced' ? 'bg-success-500/10 border-success-500/20 text-success-500' :
                   syncStatus === 'syncing' ? 'bg-brand-500/10 border-brand-500/20 text-brand-500' :
                   'bg-red-500/10 border-red-500/20 text-red-500'
@@ -208,9 +205,9 @@ function App() {
                     {syncStatus === 'syncing' && <CloudLightning size={14} className="animate-pulse" />}
                     {syncStatus === 'error' && <CloudAlert size={14} />}
                     <span className="text-[9px] font-black uppercase tracking-widest">
-                      {syncStatus === 'synced' ? 'Sincronizado con Nube Global' : 
-                       syncStatus === 'syncing' ? 'Actualizando Nube...' : 
-                       'Fallo de Conexión'}
+                      {syncStatus === 'synced' ? 'Nube Sincronizada' : 
+                       syncStatus === 'syncing' ? 'Guardando en Servidor...' : 
+                       'Error de Red'}
                     </span>
                 </div>
 
@@ -230,17 +227,35 @@ function App() {
                 </button>
             </div>
             
-            <div className="bg-dark-900 border border-dark-800 p-8 rounded-3xl relative overflow-hidden group">
-                <ShieldCheck className="absolute right-[-20px] bottom-[-20px] text-brand-500/5 group-hover:text-brand-500/10 transition-colors" size={140} />
-                <h4 className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-4">Información de Sincronización</h4>
-                <div className="space-y-3 relative z-10">
-                    <p className="text-[11px] text-dark-500 leading-relaxed">
-                        Tus datos se guardan automáticamente cada vez que realizas un cambio. La base de datos identifica tu dispositivo mediante tu correo: <strong>{user.email}</strong>.
-                    </p>
-                    <p className="text-[11px] text-dark-500 leading-relaxed">
-                        Si vas a cambiar de dispositivo, asegúrate de ver el icono <span className="text-success-500">verde</span> de la nube antes de cerrar la app.
-                    </p>
+            <div className="bg-dark-900 border border-dark-800 p-8 rounded-3xl space-y-6">
+                <div className="flex items-center gap-3">
+                    <Database className="text-brand-500" size={20} />
+                    <h4 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Diagnóstico de MuscleSync</h4>
                 </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-dark-950 p-4 rounded-2xl border border-dark-800">
+                      <div className="text-[9px] text-dark-500 uppercase font-black mb-1">Estado Red</div>
+                      <div className="text-xs text-success-500 font-bold flex items-center gap-2">
+                        <Wifi size={12} /> ONLINE
+                      </div>
+                  </div>
+                  <div className="bg-dark-950 p-4 rounded-2xl border border-dark-800">
+                      <div className="text-[9px] text-dark-500 uppercase font-black mb-1">Caché Local</div>
+                      <div className="text-xs text-white font-bold">ACTIVO</div>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-dark-500 leading-relaxed italic">
+                  * Si usas la app en dos dispositivos al mismo tiempo, espera el check verde antes de cambiar de uno a otro.
+                </p>
+                
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="w-full py-4 border border-dark-800 rounded-xl text-[10px] font-black text-dark-400 hover:text-white hover:bg-dark-800 transition-all uppercase tracking-widest"
+                >
+                  FORZAR RESINCRONIZACIÓN
+                </button>
             </div>
         </div>
       )}
