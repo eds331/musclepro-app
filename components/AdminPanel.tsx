@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
-import { User, Gender, Goal, ExperienceLevel, SubscriptionStatus } from '../types';
-import { Wand2, Users, Save, FileSpreadsheet, RefreshCw, Check, Loader2 } from 'lucide-react';
-import { INITIAL_USER } from '../services/mockData';
+import React, { useState, useEffect } from 'react';
+import { User, Gender, Goal, ExperienceLevel } from '../types';
+import { Wand2, Database, Save, FileSpreadsheet, RefreshCw, Check, Loader2, Server, Key, Globe, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { PersistenceService, DBConfig } from '../services/persistenceService';
 import { generatePlan } from '../services/routineGenerator';
 
 interface AdminPanelProps {
@@ -11,7 +11,8 @@ interface AdminPanelProps {
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onUpdateUser }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'create'>('create');
+  const [activeTab, setActiveTab] = useState<'users' | 'create' | 'infra'>('infra');
+  const [dbConfig, setDbConfig] = useState<DBConfig>(PersistenceService.getConfig());
   
   const [formData, setFormData] = useState({
     name: '',
@@ -22,23 +23,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onUpdateUser }) =>
   
   const [generatedResult, setGeneratedResult] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncSuccess, setSyncSuccess] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const handleSaveDB = (type: 'SUPABASE' | 'IHOSTING' | 'SANDBOX') => {
+    setIsSyncing(true);
+    const newConfig = { ...dbConfig, type };
+    PersistenceService.setConfig(newConfig);
+    setDbConfig(newConfig);
+    
+    setTimeout(() => {
+      setIsSyncing(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    }, 1000);
+  };
 
   const handleGenerate = () => {
     const plan = generatePlan(formData.gender, formData.level, formData.goal);
     setGeneratedResult(plan);
-  };
-
-  const handleSheetSync = () => {
-      setIsSyncing(true);
-      setSyncSuccess(false);
-      
-      // Simulación de conexión con Google Sheets API
-      setTimeout(() => {
-          setIsSyncing(false);
-          setSyncSuccess(true);
-          setTimeout(() => setSyncSuccess(false), 4000);
-      }, 2500);
   };
 
   return (
@@ -48,32 +50,124 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onUpdateUser }) =>
             <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">Admin Hub</h1>
             <p className="text-brand-500 text-[10px] font-black tracking-[0.3em] uppercase">Control Maestro de Atletas</p>
           </div>
-          <button 
-            onClick={handleSheetSync}
-            disabled={isSyncing}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                syncSuccess ? 'bg-success-500 text-black' : 'bg-white text-black hover:bg-brand-500'
-            }`}
-          >
-            {isSyncing ? <Loader2 size={16} className="animate-spin" /> : syncSuccess ? <Check size={16} /> : <FileSpreadsheet size={16} />}
-            {isSyncing ? 'SINCRONIZANDO...' : syncSuccess ? 'SINCRO EXITOSA' : 'SYNC GOOGLE SHEETS'}
-          </button>
         </header>
 
-        <div className="flex bg-dark-900 p-1.5 rounded-2xl border border-dark-800">
+        <div className="flex bg-dark-900 p-1.5 rounded-2xl border border-dark-800 overflow-x-auto no-scrollbar">
+            <button 
+                onClick={() => setActiveTab('infra')}
+                className={`flex-1 min-w-[120px] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'infra' ? 'bg-dark-800 text-brand-500 shadow-lg' : 'text-dark-500 hover:text-brand-500'}`}
+            >
+                Infraestructura
+            </button>
             <button 
                 onClick={() => setActiveTab('create')}
-                className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'create' ? 'bg-dark-800 text-white shadow-lg' : 'text-dark-500 hover:text-white'}`}
+                className={`flex-1 min-w-[120px] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'create' ? 'bg-dark-800 text-white shadow-lg' : 'text-dark-500 hover:text-white'}`}
             >
-                Generador de Protocolos
+                Protocolos
             </button>
              <button 
                 onClick={() => setActiveTab('users')}
-                className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'users' ? 'bg-dark-800 text-white shadow-lg' : 'text-dark-500 hover:text-white'}`}
+                className={`flex-1 min-w-[120px] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'users' ? 'bg-dark-800 text-white shadow-lg' : 'text-dark-500 hover:text-white'}`}
             >
-                Base de Datos Atletas
+                Atletas
             </button>
         </div>
+
+        {activeTab === 'infra' && (
+            <div className="space-y-6">
+                {/* IHOSTING OPTION */}
+                <div className="bg-dark-900 border border-dark-800 p-8 rounded-[2rem] space-y-6 shadow-2xl relative overflow-hidden">
+                    <div className="flex items-center gap-4 mb-4">
+                        <div className="p-3 bg-brand-500/10 rounded-2xl border border-brand-500/20">
+                            <Globe size={24} className="text-brand-500" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">IHosting / musclepro.cl</h3>
+                            <p className="text-[10px] text-brand-500 font-black uppercase tracking-widest">Servidor MySQL Propio</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-dark-500 uppercase font-black tracking-widest">URL de API Bridge (sync.php)</label>
+                            <input 
+                                value={dbConfig.type === 'IHOSTING' ? dbConfig.url : ''}
+                                onChange={(e) => setDbConfig({...dbConfig, url: e.target.value, type: 'IHOSTING'})}
+                                placeholder="https://musclepro.cl/api/sync.php"
+                                className="w-full bg-dark-950 border border-dark-800 rounded-xl p-4 text-white text-sm focus:border-brand-500 outline-none font-mono"
+                            />
+                        </div>
+
+                        <div className="p-4 bg-dark-950 border border-dark-800 rounded-xl">
+                            <h4 className="text-[9px] font-black text-dark-500 uppercase tracking-[0.2em] mb-3">Requerimiento Técnico</h4>
+                            <p className="text-[10px] text-gray-400 leading-relaxed italic">
+                                Asegúrate de haber subido el script <code className="text-brand-500">sync.php</code> a tu servidor y configurado las credenciales de MySQL correctamente.
+                            </p>
+                        </div>
+
+                        <button 
+                            onClick={() => handleSaveDB('IHOSTING')}
+                            disabled={isSyncing}
+                            className={`w-full font-black py-4 rounded-2xl flex items-center justify-center gap-3 transition-all shadow-xl active:scale-95 disabled:opacity-50 ${dbConfig.type === 'IHOSTING' ? 'bg-brand-500 text-black' : 'bg-dark-800 text-white hover:bg-dark-700'}`}
+                        >
+                            {isSyncing ? <Loader2 className="animate-spin" size={20} /> : (dbConfig.type === 'IHOSTING' && saveSuccess) ? <Check size={20} /> : <Save size={20} />}
+                            {isSyncing ? 'CONFIGURANDO...' : 'USAR MI HOSTING'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* SUPABASE OPTION */}
+                <div className="bg-dark-900 border border-dark-800 p-8 rounded-[2rem] space-y-6 shadow-2xl opacity-60 hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-4 mb-4">
+                        <div className="p-3 bg-success-500/10 rounded-2xl border border-success-500/20">
+                            <Server size={24} className="text-success-500" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Supabase Cloud</h3>
+                            <p className="text-[10px] text-success-500 font-black uppercase tracking-widest">Enterprise Database</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] text-dark-500 uppercase font-black tracking-widest">Supabase URL</label>
+                                <input 
+                                    value={dbConfig.type === 'SUPABASE' ? dbConfig.url : ''}
+                                    onChange={(e) => setDbConfig({...dbConfig, url: e.target.value, type: 'SUPABASE'})}
+                                    placeholder="https://xyz.supabase.co"
+                                    className="w-full bg-dark-950 border border-dark-800 rounded-xl p-4 text-white text-xs focus:border-brand-500 outline-none font-mono"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] text-dark-500 uppercase font-black tracking-widest">Anon Key</label>
+                                <input 
+                                    type="password"
+                                    value={dbConfig.type === 'SUPABASE' ? dbConfig.key : ''}
+                                    onChange={(e) => setDbConfig({...dbConfig, key: e.target.value, type: 'SUPABASE'})}
+                                    placeholder="eyJhb..."
+                                    className="w-full bg-dark-950 border border-dark-800 rounded-xl p-4 text-white text-xs focus:border-brand-500 outline-none font-mono"
+                                />
+                            </div>
+                         </div>
+                         <button 
+                            onClick={() => handleSaveDB('SUPABASE')}
+                            disabled={isSyncing}
+                            className={`w-full font-black py-4 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50 ${dbConfig.type === 'SUPABASE' ? 'bg-success-500 text-black' : 'bg-dark-800 text-white hover:bg-dark-700'}`}
+                        >
+                            USAR SUPABASE
+                        </button>
+                    </div>
+                </div>
+
+                <div className="bg-dark-900 border border-dark-800 p-6 rounded-3xl flex items-center gap-4">
+                    <ShieldCheck className="text-brand-500" size={20} />
+                    <p className="text-[10px] text-dark-500 font-medium italic">
+                        Cualquier configuración que elijas se guarda de forma persistente en este navegador y se utiliza para sincronizar tus otros dispositivos.
+                    </p>
+                </div>
+            </div>
+        )}
 
         {activeTab === 'create' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
