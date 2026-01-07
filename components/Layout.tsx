@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Dumbbell, User as UserIcon, LogOut, Activity, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, User as UserIcon, LogOut, Activity, CalendarDays, ShieldCheck } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,6 +11,8 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, onLogout, userRole }) => {
+  const isAdmin = userRole === 'ADMIN';
+
   return (
     <div className="flex h-screen w-full bg-dark-950 text-white overflow-hidden selection:bg-brand-500/30">
       {/* --- DESKTOP SIDEBAR --- */}
@@ -52,6 +54,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
               isActive={activeTab === 'agenda'} 
               onClick={() => onTabChange('agenda')} 
             />
+            {isAdmin && (
+              <SidebarItem 
+                icon={<ShieldCheck size={20} className="text-brand-500" />} 
+                label="Panel Admin" 
+                isActive={activeTab === 'admin'} 
+                onClick={() => onTabChange('admin')} 
+              />
+            )}
             <SidebarItem 
               icon={<UserIcon size={20} />} 
               label="Mi Perfil" 
@@ -91,7 +101,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
         {/* --- MOBILE BOTTOM NAV --- */}
         <nav className="md:hidden fixed bottom-0 w-full glass-nav h-[88px] flex items-start justify-around z-50 px-4 pt-4 pb-safe">
           <NavButton icon={<LayoutDashboard size={22} />} label="Hoy" isActive={activeTab === 'dashboard'} onClick={() => onTabChange('dashboard')} />
-          <NavButton icon={<CalendarDays size={22} />} label="Agenda" isActive={activeTab === 'agenda'} onClick={() => onTabChange('agenda')} />
+          {isAdmin ? (
+            <NavButton icon={<ShieldCheck size={22} />} label="Admin" isActive={activeTab === 'admin'} onClick={() => onTabChange('admin')} />
+          ) : (
+            <NavButton icon={<CalendarDays size={22} />} label="Agenda" isActive={activeTab === 'agenda'} onClick={() => onTabChange('agenda')} />
+          )}
           
           <button 
             onClick={() => onTabChange('workout')}
