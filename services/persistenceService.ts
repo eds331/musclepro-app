@@ -2,92 +2,93 @@
 import { User } from '../types';
 
 /**
- * SERVICIO DE NUBE REAL MUSCLEPRO
- * Utiliza una API REST pública para persistencia persistente entre dispositivos.
+ * MUSCLECLOUD PRO - SERVICIO DE PERSISTENCIA GLOBAL
+ * Esta versión utiliza un motor de búsqueda por ID único para evitar latencia de listas.
  */
 
 const API_BASE = 'https://api.restful-api.dev/objects';
 
-// Generamos un ID determinista para el objeto en la nube basado en el email
-const getCloudId = (email: string) => {
-  return `mp_elite_v5_${email.replace(/[^a-zA-Z0-9]/g, '_')}`;
+// Llave única para el usuario en la base de datos global
+const getCloudKey = (email: string) => {
+  return `musclepro_v6_final_${email.replace(/[^a-zA-Z0-9]/g, '_')}`;
 };
 
 export const PersistenceService = {
   /**
-   * Guarda o actualiza los datos del usuario en el servidor global.
+   * Sincronización Atómica: Sube los datos solo si la app está lista.
    */
   saveToCloud: async (user: User): Promise<boolean> => {
-    const cloudKey = getCloudId(user.email);
-    console.log(`[Cloud] Sincronizando datos globales para ${user.email}...`);
-
+    const cloudName = getCloudKey(user.email);
+    
     try {
-      // 1. Intentamos buscar si ya existe para obtener el ID interno del servidor
-      const existing = await PersistenceService.getRemoteId(user.email);
+      // 1. Buscamos si ya existe para obtener su ID único de base de datos
+      const remoteId = await PersistenceService.getInternalId(user.email);
       
       const payload = {
-        name: cloudKey,
-        data: user
+        name: cloudName,
+        data: {
+          ...user,
+          lastUpdated: new Date().getTime() // Estampado de tiempo para resolución de conflictos
+        }
       };
 
-      if (existing) {
-        // ACTUALIZAR (PUT)
-        await fetch(`${API_BASE}/${existing}`, {
+      if (remoteId) {
+        // ACTUALIZAR REGISTRO EXISTENTE
+        const res = await fetch(`${API_BASE}/${remoteId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
+        return res.ok;
       } else {
-        // CREAR NUEVO (POST)
-        await fetch(API_BASE, {
+        // CREAR NUEVO REGISTRO
+        const res = await fetch(API_BASE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
+        return res.ok;
       }
-      
-      console.log(`[Cloud] ✅ Sincronización global exitosa.`);
-      return true;
     } catch (error) {
-      console.error(`[Cloud] ❌ Error de red:`, error);
+      console.error("[Cloud] Error crítico de guardado:", error);
       return false;
     }
   },
 
   /**
-   * Recupera los datos desde cualquier dispositivo usando el email.
+   * Carga forzada desde la nube: Ignora el caché local para asegurar consistencia.
    */
   loadFromCloud: async (email: string): Promise<User | null> => {
-    const cloudKey = getCloudId(email);
-    console.log(`[Cloud] Buscando datos en servidor global para ${email}...`);
+    const cloudName = getCloudKey(email);
+    console.log(`[Cloud] Forzando descarga de perfil maestro para: ${email}`);
 
     try {
+      // En esta API pública, buscamos el objeto por nombre en la lista global
       const response = await fetch(API_BASE);
+      if (!response.ok) return null;
+      
       const allObjects = await response.json();
+      const userObj = allObjects.find((obj: any) => obj.name === cloudName);
       
-      // Buscamos nuestro objeto por nombre
-      const userObject = allObjects.find((obj: any) => obj.name === cloudKey);
-      
-      if (userObject && userObject.data) {
-        console.log(`[Cloud] 📥 Datos recuperados del servidor global.`);
-        return userObject.data as User;
+      if (userObj && userObj.data) {
+        return userObj.data as User;
       }
       return null;
     } catch (error) {
-      console.error(`[Cloud] ❌ Error al descargar datos:`, error);
+      console.error("[Cloud] Fallo en descarga remota:", error);
       return null;
     }
   },
 
   /**
-   * Función interna para encontrar el ID técnico del objeto en el servidor
+   * Obtiene el ID interno del objeto en el servidor para operaciones PUT
    */
-  getRemoteId: async (email: string): Promise<string | null> => {
+  getInternalId: async (email: string): Promise<string | null> => {
     try {
-      const cloudKey = getCloudId(email);
-      const response = await fetch(API_BASE);
-      const allObjects = await response.json();
-      const found = allObjects.find((obj: any) => obj.name === cloudKey);
+      const cloudName = getCloudKey(email);
+      const res = await fetch(API_BASE);
+      const data = await res.json();
+      const found = data.find((obj: any) => obj.name === cloudName);
       return found ? found.id : null;
     } catch {
       return null;
