@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, DailyLog } from '../types';
-import { Play, Check, Flame, Utensils, Zap, Trophy, Quote } from 'lucide-react';
+import { User, DailyLog, UserRole } from '../types';
+import { Play, Check, Flame, Utensils, Zap, Trophy, Quote, ShieldCheck, Settings } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { getDailyQuote } from '../services/quotes';
 
@@ -9,12 +9,14 @@ interface DashboardProps {
   user: User;
   onStartWorkout: () => void;
   onUpdateUser: (user: User) => void;
+  onNavigateToAdmin?: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, onStartWorkout, onUpdateUser }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, onStartWorkout, onUpdateUser, onNavigateToAdmin }) => {
   const [todayLog, setTodayLog] = useState<DailyLog | undefined>(undefined);
   const [quote, setQuote] = useState('');
   const todayStr = new Date().toISOString().split('T')[0];
+  const isAdmin = user.role === 'ADMIN';
 
   useEffect(() => {
     let log = user.dailyLogs.find(l => l.date === todayStr);
@@ -64,6 +66,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onStartWorkout, onUp
 
   return (
     <div className="space-y-6">
+        {/* Admin Quick Access Bar */}
+        {isAdmin && (
+            <div className="bg-brand-500 text-black px-4 py-2 rounded-xl flex items-center justify-between shadow-[0_0_20px_rgba(6,182,212,0.3)] animate-fade-in">
+                <div className="flex items-center gap-2">
+                    <ShieldCheck size={18} />
+                    <span className="text-xs font-black uppercase tracking-widest italic">MODO ADMINISTRADOR ACTIVO</span>
+                </div>
+                <button 
+                    onClick={onNavigateToAdmin}
+                    className="flex items-center gap-1 bg-black text-white px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-dark-800 transition-colors"
+                >
+                    <Settings size={12} /> GESTIONAR ATLETAS
+                </button>
+            </div>
+        )}
+
         <div className="sticky top-0 z-40 bg-dark-950/95 backdrop-blur-md py-3 -mx-4 px-4 border-b border-dark-800/50">
              <div className="flex justify-between items-center max-w-lg mx-auto">
                 {dates.map((date, i) => {
