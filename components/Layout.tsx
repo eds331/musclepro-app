@@ -43,7 +43,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
             <SidebarItem icon={<Dumbbell size={20} />} label="Entrenar" isActive={activeTab === 'workout'} onClick={() => onTabChange('workout')} />
             <SidebarItem icon={<CalendarDays size={20} />} label="Agenda" isActive={activeTab === 'agenda'} onClick={() => onTabChange('agenda')} />
             {isAdmin && (
-              <SidebarItem icon={<ShieldCheck size={20} className="text-brand-500" />} label="Panel Admin" isActive={activeTab === 'admin'} onClick={() => onTabChange('admin')} />
+              <SidebarItem icon={<ShieldCheck size={20} className="text-brand-500" />} label="Admin Hub" isActive={activeTab === 'admin'} onClick={() => onTabChange('admin')} />
             )}
             <SidebarItem icon={<UserIcon size={20} />} label="Mi Perfil" isActive={activeTab === 'profile'} onClick={() => onTabChange('profile')} />
         </nav>
@@ -85,7 +85,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
         <nav className="md:hidden fixed bottom-0 w-full glass-nav h-[88px] flex items-start justify-around z-50 px-4 pt-4 pb-safe">
           <NavButton icon={<LayoutDashboard size={22} />} label="Hoy" isActive={activeTab === 'dashboard'} onClick={() => onTabChange('dashboard')} />
           {isAdmin ? (
-            <NavButton icon={<ShieldCheck size={22} />} label="Admin" isActive={activeTab === 'admin'} onClick={() => onTabChange('admin')} />
+            <NavButton icon={<ShieldCheck size={22} className="text-brand-500" />} label="Admin" isActive={activeTab === 'admin'} onClick={() => onTabChange('admin')} />
           ) : (
             <NavButton icon={<CalendarDays size={22} />} label="Agenda" isActive={activeTab === 'agenda'} onClick={() => onTabChange('agenda')} />
           )}
