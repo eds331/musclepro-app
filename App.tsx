@@ -8,7 +8,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { Agenda } from './components/Agenda';
 import { Login } from './components/Login';
 import { INITIAL_USER } from './services/mockData';
-import { User, WorkoutSession, Badge, DailyLog } from './types';
+import { User, WorkoutSession, Badge, DailyLog, UserRole } from './types';
 import { Dumbbell, Loader2 } from 'lucide-react';
 
 const STORAGE_KEY = 'musclepro_v3_master';
@@ -54,9 +54,9 @@ function App() {
     setIsAuthenticated(true);
     localStorage.setItem(AUTH_KEY, 'true');
     if (email.toLowerCase() === 'ed.sanhuezag@gmail.com') {
-      setUser(prev => ({ ...prev, email, username: 'Ed Sanhueza', role: 'ADMIN' as any }));
+      setUser(prev => ({ ...prev, email, username: 'Ed Sanhueza', role: UserRole.ADMIN }));
     } else {
-      setUser(prev => ({ ...prev, email, username: email.split('@')[0] }));
+      setUser(prev => ({ ...prev, email, username: email.split('@')[0], role: UserRole.CLIENT }));
     }
   };
 
@@ -119,7 +119,14 @@ function App() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard user={user} onStartWorkout={() => setShowActiveWorkout(true)} onUpdateUser={handleUserUpdate} />;
+      case 'dashboard': return (
+        <Dashboard 
+            user={user} 
+            onStartWorkout={() => setShowActiveWorkout(true)} 
+            onUpdateUser={handleUserUpdate} 
+            onNavigateToAdmin={() => setActiveTab('admin')}
+        />
+      );
       case 'progress': return <Progress user={user} />;
       case 'workout': return (
         <div className="space-y-6 animate-fade-in">
@@ -142,7 +149,7 @@ function App() {
         </div>
       );
       case 'agenda': return <Agenda user={user} onUpdateUser={handleUserUpdate} />;
-      case 'admin': return <AdminPanel user={user} onUpdateUser={handleUserUpdate} />;
+      case 'admin': return user.role === UserRole.ADMIN ? <AdminPanel user={user} onUpdateUser={handleUserUpdate} /> : <Dashboard user={user} onStartWorkout={() => setShowActiveWorkout(true)} onUpdateUser={handleUserUpdate} />;
       case 'profile': return (
         <div className="space-y-6 animate-fade-in">
             <div className="bg-dark-900 border border-dark-800 rounded-[2.5rem] p-10 text-center relative overflow-hidden shadow-2xl">
