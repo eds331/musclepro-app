@@ -31,8 +31,8 @@ export enum SubscriptionStatus {
 
 export interface UserStats {
   age: number;
-  height: number; // cm
-  weight: number; // kg
+  height: number;
+  weight: number;
   gender: Gender;
   goal: Goal;
   level: ExperienceLevel;
@@ -42,7 +42,7 @@ export interface Exercise {
   id: string;
   name: string;
   sets: number;
-  reps: string; // e.g. "8-12"
+  reps: string;
   rpeTarget?: number;
   restSeconds: number;
   videoUrl?: string; 
@@ -65,7 +65,7 @@ export interface WorkoutExerciseLog {
 
 export interface WorkoutSession {
   id: string;
-  date: string; // ISO
+  date: string;
   planName: string;
   durationSeconds: number;
   volume: number;
@@ -84,10 +84,10 @@ export interface DietMeal {
 }
 
 export interface DailyLog {
-  date: string; // ISO Date YYYY-MM-DD
-  mealsEaten: string[]; // IDs of meals eaten
+  date: string;
+  mealsEaten: string[];
   cardioDone: boolean;
-  workoutCompletedId?: string; // ID of the workout session if done
+  workoutCompletedId?: string;
 }
 
 export interface Badge {
@@ -98,77 +98,18 @@ export interface Badge {
   dateEarned: string;
 }
 
-// --- AGENDA TYPES (Updated) ---
-
 export type AgendaItemType = 'TASK' | 'MEETING' | 'REMINDER' | 'APPOINTMENT';
 
 export interface AgendaItem {
   id: string;
   title: string;
   description?: string;
-  date: string; // YYYY-MM-DD
-  time: string; // HH:MM
+  date: string;
+  time: string;
   type: AgendaItemType;
   completed: boolean;
-  isGoogleEvent: boolean; // To distinguish synced events
+  isGoogleEvent: boolean;
 }
-
-// --- MUNDO MUSCLEPRO TYPES (New Module) ---
-
-export type LifeAreaName = 
-  | 'Salud & Energía'
-  | 'Cuerpo & Movimiento'
-  | 'Trabajo / Empresa'
-  | 'Finanzas'
-  | 'Relaciones'
-  | 'Disciplina & Enfoque'
-  | 'Desarrollo Personal'
-  | 'Familia'
-  | 'Descanso & Balance';
-
-export interface LifeHabit {
-  id: string;
-  text: string;
-  impactEnergy: number; // Can be negative
-  impactXp: number;
-  impactCredits: number;
-}
-
-export interface LifeArea {
-  name: LifeAreaName;
-  level: number;
-  currentXp: number;
-  habits: LifeHabit[];
-}
-
-export interface WorldProfile {
-  energy: number; // Max 1000
-  credits: number;
-  globalLevel: number;
-  areas: Record<LifeAreaName, LifeArea>;
-  inventory: string[]; // Items bought
-}
-
-// Social & Match Types
-export interface SocialPartner {
-  id: string;
-  username: string;
-  level: number;
-  goal: Goal;
-  experience: ExperienceLevel;
-  avatarColor: string;
-  matchPercentage: number; // Calculated dynamically
-  isOnline: boolean;
-}
-
-export interface SocialMessage {
-  id: string;
-  senderId: string; // 'me' or partnerId
-  text: string;
-  timestamp: string;
-}
-
-// ------------------------------------------
 
 export interface User {
   id: string;
@@ -177,12 +118,9 @@ export interface User {
   role: UserRole;
   subscriptionStatus: SubscriptionStatus;
   stats?: UserStats;
-  
-  // Gamification Core Fitness
   level: number;
   currentXP: number;
   badges: Badge[];
-
   currentPlan?: {
     name: string;
     description: string;
@@ -199,11 +137,8 @@ export interface User {
     type: string;
   };
   history: WorkoutSession[];
-  dailyLogs: DailyLog[]; // Track daily adherence
-
-  // NEW: Agenda Data
+  dailyLogs: DailyLog[]; 
   agenda: AgendaItem[];
-
-  // NEW: World Module Data
-  worldProfile?: WorldProfile;
+  // syncTimestamp is used to track the latest version of the user data in the cloud
+  syncTimestamp?: number;
 }
