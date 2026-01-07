@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Dumbbell, MessageSquare, User as UserIcon, LogOut, Settings, Activity, Globe, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, User as UserIcon, LogOut, Activity, CalendarDays } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,16 +8,14 @@ interface LayoutProps {
   onTabChange: (tab: string) => void;
   onLogout: () => void;
   userRole: string;
-  onEnterWorld: () => void; // NEW PROP
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, onLogout, userRole, onEnterWorld }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, onLogout, userRole }) => {
   return (
     <div className="flex h-screen w-full bg-dark-950 text-white overflow-hidden selection:bg-brand-500/30">
       {/* --- DESKTOP SIDEBAR --- */}
       <aside className="hidden md:flex flex-col w-72 bg-dark-950 border-r border-dark-800 p-6 flex-shrink-0">
         <div className="mb-10 px-2 flex justify-center">
-           {/* LOGO CSS REPLACEMENT */}
            <div className="flex flex-col items-center">
               <div className="flex items-center gap-2">
                 <Dumbbell className="text-brand-500 transform -rotate-12" size={28} />
@@ -25,7 +23,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
                     MUSCLE<span className="text-brand-500">PRO</span>
                 </h1>
               </div>
-              <span className="text-[9px] tracking-[0.4em] text-dark-500 mt-1 uppercase font-bold">PERFORMANCE</span>
+              <span className="text-[9px] tracking-[0.4em] text-dark-500 mt-1 uppercase font-bold">ELITE PERFORMANCE</span>
            </div>
         </div>
 
@@ -55,42 +53,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
               onClick={() => onTabChange('agenda')} 
             />
             <SidebarItem 
-              icon={<MessageSquare size={20} />} 
-              label="Coach IA" 
-              isActive={activeTab === 'ai-chat'} 
-              onClick={() => onTabChange('ai-chat')} 
+              icon={<UserIcon size={20} />} 
+              label="Mi Perfil" 
+              isActive={activeTab === 'profile'} 
+              onClick={() => onTabChange('profile')} 
             />
-            
-            {userRole === 'ADMIN' ? (
-                <SidebarItem 
-                  icon={<Settings size={20} />} 
-                  label="Panel Admin" 
-                  isActive={activeTab === 'admin'} 
-                  onClick={() => onTabChange('admin')} 
-                />
-            ) : (
-                <SidebarItem 
-                  icon={<UserIcon size={20} />} 
-                  label="Mi Perfil" 
-                  isActive={activeTab === 'profile'} 
-                  onClick={() => onTabChange('profile')} 
-                />
-            )}
-
-            <div className="pt-8 mt-4 border-t border-dark-800">
-                <button 
-                  onClick={onEnterWorld}
-                  className="flex items-center gap-3 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-dark-800 to-dark-900 border border-dark-700 hover:border-brand-500/50 transition-all group"
-                >
-                    <Globe size={20} className="text-brand-500 group-hover:animate-pulse" />
-                    <span className="font-bold text-sm text-gray-300 group-hover:text-white">Mundo MUSCLEPRO</span>
-                </button>
-            </div>
         </nav>
 
         <button 
           onClick={onLogout} 
-          className="flex items-center gap-3 text-dark-500 hover:text-white transition-colors mt-auto pt-6 px-4 text-sm font-medium"
+          className="flex items-center gap-3 text-dark-500 hover:text-red-400 transition-colors mt-auto pt-6 px-4 text-sm font-medium border-t border-dark-800"
         >
             <LogOut size={18} />
             <span>Cerrar Sesión</span>
@@ -100,7 +72,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
       {/* --- MAIN CONTENT AREA --- */}
       <main className="flex-1 flex flex-col relative w-full h-full overflow-hidden bg-dark-950">
         
-        {/* MOBILE FIXED HEADER WITH LOGO */}
+        {/* MOBILE FIXED HEADER */}
         <header className="md:hidden flex-none h-16 bg-dark-950/80 backdrop-blur-md border-b border-dark-800 flex items-center justify-center z-50 sticky top-0">
              <div className="flex items-center gap-2">
                 <Dumbbell className="text-brand-500" size={20} />
@@ -121,7 +93,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
           <NavButton icon={<LayoutDashboard size={22} />} label="Hoy" isActive={activeTab === 'dashboard'} onClick={() => onTabChange('dashboard')} />
           <NavButton icon={<CalendarDays size={22} />} label="Agenda" isActive={activeTab === 'agenda'} onClick={() => onTabChange('agenda')} />
           
-          {/* Main Action Button */}
           <button 
             onClick={() => onTabChange('workout')}
             className="relative -top-8 bg-brand-500 text-black p-4 rounded-full shadow-[0_0_20px_rgba(6,182,212,0.4)] active:scale-95 transition-transform"
@@ -129,17 +100,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
             <Dumbbell size={24} strokeWidth={2.5} />
           </button>
 
-          <NavButton icon={<MessageSquare size={22} />} label="Coach" isActive={activeTab === 'ai-chat'} onClick={() => onTabChange('ai-chat')} />
-          
-          {/* World Entry Point Mobile */}
-          <NavButton icon={<Globe size={22} />} label="Mundo" isActive={false} onClick={onEnterWorld} />
+          <NavButton icon={<Activity size={22} />} label="Progreso" isActive={activeTab === 'progress'} onClick={() => onTabChange('progress')} />
+          <NavButton icon={<UserIcon size={22} />} label="Perfil" isActive={activeTab === 'profile'} onClick={() => onTabChange('profile')} />
         </nav>
       </main>
     </div>
   );
 };
 
-// Sub-components
 const SidebarItem = ({ icon, label, isActive, onClick }: { icon: React.ReactNode, label: string, isActive: boolean, onClick: () => void }) => (
   <button 
     onClick={onClick}
