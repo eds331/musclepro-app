@@ -2,38 +2,58 @@
 import { User } from '../types';
 
 /**
- * MUSCLECLOUD PRO - SERVICIO DE PERSISTENCIA GLOBAL
- * Esta versión utiliza un motor de búsqueda por ID único para evitar latencia de listas.
+ * MUSCLEPRO CLOUD ENGINE v7
+ * Utiliza un sistema de vinculación directa por ID para garantizar sincronización instantánea.
  */
 
 const API_BASE = 'https://api.restful-api.dev/objects';
-
-// Llave única para el usuario en la base de datos global
-const getCloudKey = (email: string) => {
-  return `musclepro_v6_final_${email.replace(/[^a-zA-Z0-9]/g, '_')}`;
-};
+const ID_LINK_KEY = 'mp_cloud_object_id_v7';
 
 export const PersistenceService = {
   /**
-   * Sincronización Atómica: Sube los datos solo si la app está lista.
+   * Obtiene el ID único de la base de datos vinculado a este usuario.
+   * Si no existe localmente, intenta recuperarlo del servidor por el nombre (email).
+   */
+  getOrLinkedId: async (email: string): Promise<string | null> => {
+    // 1. Ver en caché local del dispositivo
+    const cachedId = localStorage.getItem(`${ID_LINK_KEY}_${email}`);
+    if (cachedId) return cachedId;
+
+    // 2. Si no está en caché (dispositivo nuevo), buscar en el servidor
+    try {
+      const response = await fetch(API_BASE);
+      const allObjects = await response.json();
+      const cloudName = `musclepro_user_${email.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const found = allObjects.find((obj: any) => obj.name === cloudName);
+      
+      if (found) {
+        localStorage.setItem(`${ID_LINK_KEY}_${email}`, found.id);
+        return found.id;
+      }
+    } catch (e) {
+      console.error("Error buscando ID vinculado:", e);
+    }
+    return null;
+  },
+
+  /**
+   * Guarda los datos asegurando que no se pierda la conexión al objeto maestro.
    */
   saveToCloud: async (user: User): Promise<boolean> => {
-    const cloudName = getCloudKey(user.email);
-    
     try {
-      // 1. Buscamos si ya existe para obtener su ID único de base de datos
-      const remoteId = await PersistenceService.getInternalId(user.email);
+      const remoteId = await PersistenceService.getOrLinkedId(user.email);
+      const cloudName = `musclepro_user_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
       
       const payload = {
         name: cloudName,
         data: {
           ...user,
-          lastUpdated: new Date().getTime() // Estampado de tiempo para resolución de conflictos
+          syncTimestamp: Date.now() // Sello de tiempo para control de versiones
         }
       };
 
       if (remoteId) {
-        // ACTUALIZAR REGISTRO EXISTENTE
+        // ACTUALIZACIÓN DIRECTA (MUCHO MÁS RÁPIDA)
         const res = await fetch(`${API_BASE}/${remoteId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -41,56 +61,44 @@ export const PersistenceService = {
         });
         return res.ok;
       } else {
-        // CREAR NUEVO REGISTRO
+        // CREACIÓN INICIAL
         const res = await fetch(API_BASE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        return res.ok;
+        const result = await res.json();
+        if (result.id) {
+          localStorage.setItem(`${ID_LINK_KEY}_${user.email}`, result.id);
+          return true;
+        }
       }
+      return false;
     } catch (error) {
-      console.error("[Cloud] Error crítico de guardado:", error);
+      console.error("Fallo crítico en MuscleSync:", error);
       return false;
     }
   },
 
   /**
-   * Carga forzada desde la nube: Ignora el caché local para asegurar consistencia.
+   * Carga forzada: se asegura de traer la versión más fresca del servidor.
    */
   loadFromCloud: async (email: string): Promise<User | null> => {
-    const cloudName = getCloudKey(email);
-    console.log(`[Cloud] Forzando descarga de perfil maestro para: ${email}`);
-
     try {
-      // En esta API pública, buscamos el objeto por nombre en la lista global
-      const response = await fetch(API_BASE);
-      if (!response.ok) return null;
-      
-      const allObjects = await response.json();
-      const userObj = allObjects.find((obj: any) => obj.name === cloudName);
-      
-      if (userObj && userObj.data) {
-        return userObj.data as User;
+      const remoteId = await PersistenceService.getOrLinkedId(email);
+      if (!remoteId) return null;
+
+      const response = await fetch(`${API_BASE}/${remoteId}`);
+      if (!response.ok) {
+        // Si el ID ya no existe en el servidor, limpiar caché y re-intentar
+        localStorage.removeItem(`${ID_LINK_KEY}_${email}`);
+        return null;
       }
-      return null;
+      
+      const result = await response.json();
+      return result.data as User;
     } catch (error) {
-      console.error("[Cloud] Fallo en descarga remota:", error);
-      return null;
-    }
-  },
-
-  /**
-   * Obtiene el ID interno del objeto en el servidor para operaciones PUT
-   */
-  getInternalId: async (email: string): Promise<string | null> => {
-    try {
-      const cloudName = getCloudKey(email);
-      const res = await fetch(API_BASE);
-      const data = await res.json();
-      const found = data.find((obj: any) => obj.name === cloudName);
-      return found ? found.id : null;
-    } catch {
+      console.error("Error descargando perfil maestro:", error);
       return null;
     }
   }
