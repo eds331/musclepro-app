@@ -2,8 +2,8 @@
 import { User } from '../types';
 
 /**
- * MUSCLEPRO INFRASTRUCTURE ENGINE v10
- * Soporte para iHosting.cl (MySQL/PHP Bridge) + Supabase + Sandbox
+ * MUSCLEPRO INFRASTRUCTURE ENGINE v10.1
+ * Soporte optimizado para iHosting.cl y depuración de errores.
  */
 
 const DB_CONFIG_KEY = 'mp_database_config';
@@ -27,21 +27,23 @@ export const PersistenceService = {
     localStorage.setItem(DB_CONFIG_KEY, JSON.stringify(config));
   },
 
-  /**
-   * Ciclo de Sincronización Maestro
-   */
   sync: async (localUser: User): Promise<User> => {
     const config = PersistenceService.getConfig();
     
-    if (config.type === 'IHOSTING' && config.url) {
-      return await PersistenceService.syncIHosting(localUser, config);
-    }
-    
-    if (config.type === 'SUPABASE' && config.url && config.key) {
-      return await PersistenceService.syncSupabase(localUser, config);
-    }
+    try {
+      if (config.type === 'IHOSTING' && config.url) {
+        return await PersistenceService.syncIHosting(localUser, config);
+      }
+      
+      if (config.type === 'SUPABASE' && config.url && config.key) {
+        return await PersistenceService.syncSupabase(localUser, config);
+      }
 
-    return await PersistenceService.syncSandbox(localUser);
+      return await PersistenceService.syncSandbox(localUser);
+    } catch (e) {
+      console.error("Critical Sync Error:", e);
+      return localUser;
+    }
   },
 
   /**
@@ -49,42 +51,55 @@ export const PersistenceService = {
    */
   syncIHosting: async (user: User, config: DBConfig): Promise<User> => {
     try {
-      // Intentamos obtener datos
-      const res = await fetch(`${config.url}?email=${user.email}`);
-      if (!res.ok) throw new Error('Error de conexión con iHosting');
+      // 1. Intentar descargar datos remotos
+      const res = await fetch(`${config.url}?email=${user.email}`, {
+        cache: 'no-store'
+      });
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}: Error de servidor`);
       
       const data = await res.json();
       
+      // Si el servidor tiene datos más nuevos, los usamos
       if (data && data.profile_data) {
         const remoteUser = typeof data.profile_data === 'string' ? JSON.parse(data.profile_data) : data.profile_data;
-        if (remoteUser.syncTimestamp > (user as any).syncTimestamp || 0) {
-          console.log("[iHosting] 🌐 Sincronización exitosa desde musclepro.cl");
+        const remoteTS = remoteUser.syncTimestamp || 0;
+        const localTS = (user as any).syncTimestamp || 0;
+
+        if (remoteTS > localTS) {
+          console.log("[iHosting] 🌐 Datos remotos más nuevos. Actualizando local.");
           return remoteUser;
         }
       }
 
-      // Si lo local es más nuevo, guardamos
+      // Si nuestros datos son más nuevos o el servidor no tiene nada, guardamos lo local
       await PersistenceService.saveIHosting(user, config);
       return user;
     } catch (e) {
-      console.error("[iHosting] Error de conexión:", e);
-      return user;
+      console.error("[iHosting] Sync Failed:", e);
+      throw e; // Propagar para que la UI sepa que hubo error
     }
   },
 
   saveIHosting: async (user: User, config: DBConfig) => {
-    try {
-      await fetch(config.url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: user.email,
-          profile_data: { ...user, syncTimestamp: Date.now() }
-        })
-      });
-    } catch (e) {
-      console.error("[iHosting] Error al guardar en servidor:", e);
+    const payload = {
+      email: user.email,
+      profile_data: { ...user, syncTimestamp: Date.now() }
+    };
+
+    const res = await fetch(config.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Error al guardar: ${errorText}`);
     }
+    
+    console.log("[iHosting] ✅ Datos guardados con éxito en musclepro.cl");
+    return true;
   },
 
   /**
