@@ -10,11 +10,11 @@ import { Login } from './components/Login';
 import { PersistenceService } from './services/persistenceService';
 import { INITIAL_USER } from './services/mockData';
 import { User, WorkoutSession, Badge, DailyLog, UserRole } from './types';
-import { Dumbbell, Loader2, CloudCheck, CloudAlert, CloudLightning } from 'lucide-react';
+import { Dumbbell, Loader2, CloudCheck, CloudAlert, CloudLightning, ShieldCheck } from 'lucide-react';
 
-const STORAGE_KEY = 'musclepro_v3_master_v2';
-const AUTH_KEY = 'musclepro_v3_auth_v2';
-const EMAIL_KEY = 'musclepro_v3_user_email';
+const STORAGE_KEY = 'musclepro_v6_local_cache';
+const AUTH_KEY = 'musclepro_v6_session';
+const EMAIL_KEY = 'musclepro_v6_email';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -24,60 +24,69 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
   
+  // CRÍTICO: Ref para evitar que el auto-guardado se dispare antes de cargar la nube
+  const isAppReady = useRef(false);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. CARGA INICIAL: BUSCAR EN LA NUBE REAL
+  // 1. CARGA INICIAL (SOLO AL ARRANCAR O RECARGAR)
   useEffect(() => {
-    const checkAuth = async () => {
+    const initApp = async () => {
       const sessionActive = localStorage.getItem(AUTH_KEY);
       const savedEmail = localStorage.getItem(EMAIL_KEY);
       
       if (sessionActive === 'true' && savedEmail) {
         setIsAuthenticated(true);
-        // Prioridad 1: Intentar bajar de la nube real
-        const cloudUser = await PersistenceService.loadFromCloud(savedEmail);
-        if (cloudUser) {
-          setUser(cloudUser);
+        
+        // Descarga obligatoria de la nube antes de mostrar nada
+        const remoteUser = await PersistenceService.loadFromCloud(savedEmail);
+        
+        if (remoteUser) {
+          console.log("[App] Perfil remoto cargado con éxito.");
+          setUser(remoteUser);
         } else {
-          // Prioridad 2: Si no hay nube (nuevo dispositivo), usar local
-          const savedLocal = localStorage.getItem(STORAGE_KEY);
-          if (savedLocal) setUser(JSON.parse(savedLocal));
+          // Si no hay nube, intentar local
+          const localData = localStorage.getItem(STORAGE_KEY);
+          if (localData) setUser(JSON.parse(localData));
         }
       }
       
+      // Marcamos la app como lista para empezar a sincronizar cambios
+      isAppReady.current = true;
       setLoading(false);
     };
     
-    checkAuth();
+    initApp();
   }, []);
 
-  // 2. AUTO-GUARDADO GLOBAL (Cada vez que tocas algo)
+  // 2. MOTOR DE AUTO-GUARDADO (Solo se activa si isAppReady es true)
   useEffect(() => {
-    if (isAuthenticated && !loading) {
-      // Guardado local (seguridad offline)
+    if (isAuthenticated && isAppReady.current && !loading) {
+      // Guardado local preventivo
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
 
-      // Sincronización Remota (Cloud Sync)
+      // Sincronización Remota Debounced
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       
       syncTimeoutRef.current = setTimeout(async () => {
         setSyncStatus('syncing');
         const success = await PersistenceService.saveToCloud(user);
         setSyncStatus(success ? 'synced' : 'error');
-      }, 1500); // Debounce de 1.5s para no saturar la red
+      }, 2000); 
     }
   }, [user, isAuthenticated, loading]);
 
   const handleLogin = async (email: string) => {
     setLoading(true);
     localStorage.setItem(EMAIL_KEY, email);
+    localStorage.setItem(AUTH_KEY, 'true');
     
-    // Al loguear, intentamos recuperar todo del servidor global
-    const cloudUser = await PersistenceService.loadFromCloud(email);
+    // Al loguear, forzamos descarga de nube
+    const remoteUser = await PersistenceService.loadFromCloud(email);
     
-    if (cloudUser) {
-      setUser(cloudUser);
+    if (remoteUser) {
+      setUser(remoteUser);
     } else {
+      // Nuevo usuario
       const newUser = { ...INITIAL_USER, email, username: email.split('@')[0] };
       if (email.toLowerCase() === 'ed.sanhuezag@gmail.com') {
         newUser.role = UserRole.ADMIN;
@@ -88,15 +97,14 @@ function App() {
     }
     
     setIsAuthenticated(true);
-    localStorage.setItem(AUTH_KEY, 'true');
+    isAppReady.current = true; // Importante: activar el ready al loguear
     setLoading(false);
   };
 
   const handleLogout = () => {
-    if (confirm("Se cerrará la sesión. Tus datos están a salvo en la nube.")) {
+    if (confirm("Se cerrará la sesión. Tus datos están sincronizados globalmente.")) {
       setIsAuthenticated(false);
-      localStorage.removeItem(AUTH_KEY);
-      localStorage.removeItem(EMAIL_KEY);
+      localStorage.clear();
       window.location.reload();
     }
   };
@@ -127,14 +135,17 @@ function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-dark-950 flex flex-col items-center justify-center p-6 text-center">
-         <div className="relative mb-10">
-            <div className="absolute inset-0 bg-brand-500/20 blur-[60px] animate-pulse rounded-full"></div>
-            <Dumbbell className="text-brand-500 relative z-10 animate-bounce" size={64} />
+         <div className="relative mb-12">
+            <div className="absolute inset-0 bg-brand-500/30 blur-[80px] animate-pulse rounded-full"></div>
+            <Dumbbell className="text-brand-500 relative z-10 animate-bounce" size={80} />
          </div>
-         <h1 className="text-4xl font-black text-white italic tracking-tighter mb-4">MUSCLE<span className="text-brand-500">PRO</span></h1>
-         <div className="flex items-center gap-3 bg-dark-900 border border-dark-800 px-6 py-3 rounded-2xl">
-            <Loader2 size={16} className="animate-spin text-brand-500" />
-            <span className="text-[10px] text-dark-400 font-black uppercase tracking-[0.3em]">Sincronizando con Nube Global...</span>
+         <h1 className="text-4xl font-black text-white italic tracking-tighter mb-6">MUSCLE<span className="text-brand-500">PRO</span></h1>
+         <div className="flex flex-col items-center gap-4">
+            <div className="flex items-center gap-3 bg-dark-900 border border-dark-800 px-8 py-4 rounded-2xl shadow-2xl">
+                <Loader2 size={20} className="animate-spin text-brand-500" />
+                <span className="text-xs text-white font-black uppercase tracking-[0.2em]">Conectando con Servidor Global...</span>
+            </div>
+            <p className="text-dark-600 text-[10px] font-bold uppercase tracking-widest">Asegurando integridad de tus datos</p>
          </div>
       </div>
     );
@@ -181,13 +192,13 @@ function App() {
       {activeTab === 'profile' && (
         <div className="space-y-6 animate-fade-in">
             <div className="bg-dark-900 border border-dark-800 rounded-[2.5rem] p-10 text-center relative overflow-hidden shadow-2xl">
-                <div className="w-24 h-24 bg-dark-800 rounded-full mx-auto flex items-center justify-center text-4xl mb-6 border-2 border-dark-700 text-brand-500 font-black shadow-inner">
+                <div className="w-24 h-24 bg-dark-800 rounded-full mx-auto flex items-center justify-center text-4xl mb-6 border-2 border-dark-700 text-brand-500 font-black">
                     {user.username.charAt(0)}
                 </div>
                 <h2 className="text-3xl font-black text-white mb-1 italic tracking-tighter uppercase">{user.username}</h2>
                 <p className="text-dark-500 font-bold tracking-widest text-[10px] uppercase mb-8">{user.email}</p>
                 
-                {/* STATUS DE NUBE REAL */}
+                {/* INDICADOR DE NUBE REAL */}
                 <div className={`flex items-center justify-center gap-2 mb-8 py-2 px-6 rounded-full w-fit mx-auto border transition-all ${
                   syncStatus === 'synced' ? 'bg-success-500/10 border-success-500/20 text-success-500' :
                   syncStatus === 'syncing' ? 'bg-brand-500/10 border-brand-500/20 text-brand-500' :
@@ -197,9 +208,9 @@ function App() {
                     {syncStatus === 'syncing' && <CloudLightning size={14} className="animate-pulse" />}
                     {syncStatus === 'error' && <CloudAlert size={14} />}
                     <span className="text-[9px] font-black uppercase tracking-widest">
-                      {syncStatus === 'synced' ? 'Nube Global Conectada' : 
-                       syncStatus === 'syncing' ? 'Actualizando Servidor...' : 
-                       'Error de Sincronización'}
+                      {syncStatus === 'synced' ? 'Sincronizado con Nube Global' : 
+                       syncStatus === 'syncing' ? 'Actualizando Nube...' : 
+                       'Fallo de Conexión'}
                     </span>
                 </div>
 
@@ -219,11 +230,17 @@ function App() {
                 </button>
             </div>
             
-            <div className="bg-dark-900 border border-dark-800 p-6 rounded-3xl">
-                <h4 className="text-[10px] font-black text-dark-500 uppercase tracking-widest mb-4">Información de Red</h4>
-                <p className="text-[11px] text-gray-400 leading-relaxed">
-                  Tus datos ahora se sincronizan con un servidor central. Puedes abrir esta app en tu notebook y celular simultáneamente y verás los cambios reflejados al recargar o iniciar sesión.
-                </p>
+            <div className="bg-dark-900 border border-dark-800 p-8 rounded-3xl relative overflow-hidden group">
+                <ShieldCheck className="absolute right-[-20px] bottom-[-20px] text-brand-500/5 group-hover:text-brand-500/10 transition-colors" size={140} />
+                <h4 className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-4">Información de Sincronización</h4>
+                <div className="space-y-3 relative z-10">
+                    <p className="text-[11px] text-dark-500 leading-relaxed">
+                        Tus datos se guardan automáticamente cada vez que realizas un cambio. La base de datos identifica tu dispositivo mediante tu correo: <strong>{user.email}</strong>.
+                    </p>
+                    <p className="text-[11px] text-dark-500 leading-relaxed">
+                        Si vas a cambiar de dispositivo, asegúrate de ver el icono <span className="text-success-500">verde</span> de la nube antes de cerrar la app.
+                    </p>
+                </div>
             </div>
         </div>
       )}
