@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, DailyLog } from '../types';
-import { Play, Check, Flame, Utensils, Zap, Trophy } from 'lucide-react';
+import { Play, Check, Flame, Utensils, Zap, Trophy, Quote } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { getDailyQuote } from '../services/quotes';
 
 interface DashboardProps {
   user: User;
@@ -12,6 +13,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, onStartWorkout, onUpdateUser }) => {
   const [todayLog, setTodayLog] = useState<DailyLog | undefined>(undefined);
+  const [quote, setQuote] = useState('');
   const todayStr = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
@@ -20,6 +22,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onStartWorkout, onUp
         log = { date: todayStr, mealsEaten: [], cardioDone: false };
     }
     setTodayLog(log);
+    setQuote(getDailyQuote());
   }, [user, todayStr]);
 
   const handleToggleMeal = (mealId: string) => {
@@ -154,6 +157,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onStartWorkout, onUp
                 </div>
                 <div className="absolute left-[-30px] top-1/2 -translate-y-1/2 w-64 h-64 bg-brand-500/5 blur-[80px] rounded-full pointer-events-none"></div>
             </div>
+        </div>
+
+        {/* --- MOTIVATIONAL QUOTE SECTION --- */}
+        <div className="bg-brand-500/5 border border-brand-500/10 rounded-2xl p-5 relative overflow-hidden group">
+            <Quote className="absolute right-4 top-4 text-brand-500/10 group-hover:scale-110 transition-transform" size={48} />
+            <p className="text-sm md:text-base text-gray-200 font-medium italic relative z-10 leading-relaxed pr-8">
+                "{quote}"
+            </p>
+            <div className="mt-2 text-[9px] font-black text-brand-500 uppercase tracking-widest opacity-60">MINDSET DIARIO</div>
         </div>
 
         <div className="space-y-4">
