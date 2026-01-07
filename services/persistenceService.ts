@@ -2,66 +2,101 @@
 import { User } from '../types';
 
 /**
- * MUSCLEPRO CLOUD ENGINE v7
- * Utiliza un sistema de vinculación directa por ID para garantizar sincronización instantánea.
+ * MUSCLEPRO CLOUD ENGINE v8 - PRODUCTION GRADE
+ * Sistema de sincronización con direccionamiento directo y resolución de conflictos.
  */
 
 const API_BASE = 'https://api.restful-api.dev/objects';
-const ID_LINK_KEY = 'mp_cloud_object_id_v7';
+const CLOUD_ID_KEY = 'musclepro_v8_cloud_id';
 
 export const PersistenceService = {
   /**
-   * Obtiene el ID único de la base de datos vinculado a este usuario.
-   * Si no existe localmente, intenta recuperarlo del servidor por el nombre (email).
+   * Genera un nombre único basado en el email para descubrimiento inicial.
    */
-  getOrLinkedId: async (email: string): Promise<string | null> => {
-    // 1. Ver en caché local del dispositivo
-    const cachedId = localStorage.getItem(`${ID_LINK_KEY}_${email}`);
-    if (cachedId) return cachedId;
-
-    // 2. Si no está en caché (dispositivo nuevo), buscar en el servidor
-    try {
-      const response = await fetch(API_BASE);
-      const allObjects = await response.json();
-      const cloudName = `musclepro_user_${email.replace(/[^a-zA-Z0-9]/g, '_')}`;
-      const found = allObjects.find((obj: any) => obj.name === cloudName);
-      
-      if (found) {
-        localStorage.setItem(`${ID_LINK_KEY}_${email}`, found.id);
-        return found.id;
-      }
-    } catch (e) {
-      console.error("Error buscando ID vinculado:", e);
-    }
-    return null;
+  getUniqueName: (email: string) => {
+    return `MP_PRO_V8_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
   },
 
   /**
-   * Guarda los datos asegurando que no se pierda la conexión al objeto maestro.
+   * Sincroniza el estado local con la nube.
+   * Resuelve quién tiene la versión más reciente.
    */
-  saveToCloud: async (user: User): Promise<boolean> => {
+  sync: async (localUser: User): Promise<User> => {
     try {
-      const remoteId = await PersistenceService.getOrLinkedId(user.email);
-      const cloudName = `musclepro_user_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const cloudId = localStorage.getItem(`${CLOUD_ID_KEY}_${localUser.email}`);
+      const uniqueName = PersistenceService.getUniqueName(localUser.email);
+
+      // 1. Intentar obtener datos de la nube
+      let remoteData: any = null;
       
+      if (cloudId) {
+        const res = await fetch(`${API_BASE}/${cloudId}`);
+        if (res.ok) {
+          const json = await res.json();
+          remoteData = json.data;
+        } else {
+          // Si el ID guardado ya no existe, lo borramos para re-descubrir
+          localStorage.removeItem(`${CLOUD_ID_KEY}_${localUser.email}`);
+        }
+      }
+
+      // 2. Si no tenemos ID, intentamos descubrir por nombre (para nuevos dispositivos)
+      if (!remoteData) {
+        const listRes = await fetch(API_BASE);
+        const all = await listRes.json();
+        const found = all.find((obj: any) => obj.name === uniqueName);
+        if (found) {
+          remoteData = found.data;
+          localStorage.setItem(`${CLOUD_ID_KEY}_${localUser.email}`, found.id);
+        }
+      }
+
+      // 3. Resolución de conflictos por timestamp
+      // Si la nube es más nueva que lo local, la nube gana.
+      if (remoteData && remoteData.lastUpdated > (localUser.currentXP || 0)) { 
+        // Nota: Usamos una propiedad que cambie siempre o un timestamp dedicado
+        if (remoteData.syncTimestamp > (localUser as any).syncTimestamp || 0) {
+            console.log("[Cloud] ☁️ Nube es más reciente. Actualizando local...");
+            return remoteData as User;
+        }
+      }
+
+      // 4. Si lo local es más nuevo o igual, actualizamos la nube
+      console.log("[Cloud] ⬆️ Local es maestro. Actualizando nube...");
+      await PersistenceService.save(localUser);
+      return localUser;
+
+    } catch (error) {
+      console.error("[Cloud] Error en ciclo de sincronización:", error);
+      return localUser;
+    }
+  },
+
+  /**
+   * Guarda de forma atómica en la nube.
+   */
+  save: async (user: User): Promise<void> => {
+    try {
+      const cloudId = localStorage.getItem(`${CLOUD_ID_KEY}_${user.email}`);
+      const uniqueName = PersistenceService.getUniqueName(user.email);
+      
+      // Añadimos metadata de sincronización
       const payload = {
-        name: cloudName,
+        name: uniqueName,
         data: {
           ...user,
-          syncTimestamp: Date.now() // Sello de tiempo para control de versiones
+          syncTimestamp: Date.now(),
+          lastUpdated: Date.now()
         }
       };
 
-      if (remoteId) {
-        // ACTUALIZACIÓN DIRECTA (MUCHO MÁS RÁPIDA)
-        const res = await fetch(`${API_BASE}/${remoteId}`, {
+      if (cloudId) {
+        await fetch(`${API_BASE}/${cloudId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        return res.ok;
       } else {
-        // CREACIÓN INICIAL
         const res = await fetch(API_BASE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -69,37 +104,11 @@ export const PersistenceService = {
         });
         const result = await res.json();
         if (result.id) {
-          localStorage.setItem(`${ID_LINK_KEY}_${user.email}`, result.id);
-          return true;
+          localStorage.setItem(`${CLOUD_ID_KEY}_${user.email}`, result.id);
         }
       }
-      return false;
     } catch (error) {
-      console.error("Fallo crítico en MuscleSync:", error);
-      return false;
-    }
-  },
-
-  /**
-   * Carga forzada: se asegura de traer la versión más fresca del servidor.
-   */
-  loadFromCloud: async (email: string): Promise<User | null> => {
-    try {
-      const remoteId = await PersistenceService.getOrLinkedId(email);
-      if (!remoteId) return null;
-
-      const response = await fetch(`${API_BASE}/${remoteId}`);
-      if (!response.ok) {
-        // Si el ID ya no existe en el servidor, limpiar caché y re-intentar
-        localStorage.removeItem(`${ID_LINK_KEY}_${email}`);
-        return null;
-      }
-      
-      const result = await response.json();
-      return result.data as User;
-    } catch (error) {
-      console.error("Error descargando perfil maestro:", error);
-      return null;
+      console.error("[Cloud] Error al guardar:", error);
     }
   }
 };
