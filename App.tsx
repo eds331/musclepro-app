@@ -10,11 +10,11 @@ import { Login } from './components/Login';
 import { PersistenceService } from './services/persistenceService';
 import { INITIAL_USER } from './services/mockData';
 import { User, WorkoutSession, Badge, DailyLog, UserRole } from './types';
-import { Dumbbell, Loader2, CloudCheck, CloudAlert, CloudLightning, Database, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Dumbbell, Loader2, CloudCheck, CloudAlert, CloudLightning, Database, ShieldCheck, RefreshCw, HardDrive } from 'lucide-react';
 
-const STORAGE_KEY = 'musclepro_v8_local_cache';
-const AUTH_KEY = 'musclepro_v8_auth_session';
-const EMAIL_KEY = 'musclepro_v8_user_email';
+const STORAGE_KEY = 'musclepro_v10_local_cache';
+const AUTH_KEY = 'musclepro_v10_auth_session';
+const EMAIL_KEY = 'musclepro_v10_user_email';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -24,11 +24,10 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
   
-  // Flag crítico para evitar que useEffect de guardado corra antes de la carga
   const isInitialized = useRef(false);
   const syncTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. CARGA INICIAL: PULL ANTES QUE NADA
+  // Inicialización
   useEffect(() => {
     const init = async () => {
       const email = localStorage.getItem(EMAIL_KEY);
@@ -36,9 +35,13 @@ function App() {
 
       if (auth === 'true' && email) {
         setIsAuthenticated(true);
-        // CARGA PRIORITARIA: Intentamos sincronizar con la nube de entrada
-        const syncedUser = await PersistenceService.sync(user);
-        setUser(syncedUser);
+        try {
+          const syncedUser = await PersistenceService.sync({ ...INITIAL_USER, email });
+          setUser(syncedUser);
+          setSyncStatus('synced');
+        } catch (e) {
+          setSyncStatus('error');
+        }
       }
       
       isInitialized.current = true;
@@ -47,24 +50,28 @@ function App() {
     init();
   }, []);
 
-  // 2. MOTOR DE AUTO-GUARDADO (PUSH)
+  // Motor de Sincronización Automática
   useEffect(() => {
     if (isAuthenticated && isInitialized.current && !loading) {
-      // Guardado local instantáneo
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
 
-      // Guardado en la nube con Debounce (3 segundos de inactividad)
       if (syncTimer.current) clearTimeout(syncTimer.current);
       
       syncTimer.current = setTimeout(async () => {
         setSyncStatus('syncing');
         try {
-            await PersistenceService.save(user);
+            const result = await PersistenceService.sync(user);
+            // Si el servidor nos devolvió algo más nuevo, actualizamos el estado local
+            // Fix: result.syncTimestamp is now available on User type. Removed (user as any) cast.
+            if (result.syncTimestamp && result.syncTimestamp > (user.syncTimestamp || 0)) {
+              setUser(result);
+            }
             setSyncStatus('synced');
-        } catch {
+        } catch (e) {
+            console.error("Sync Loop Error:", e);
             setSyncStatus('error');
         }
-      }, 3000);
+      }, 2000); // 2 segundos después del último cambio
     }
   }, [user, isAuthenticated, loading]);
 
@@ -73,25 +80,26 @@ function App() {
     localStorage.setItem(EMAIL_KEY, email);
     localStorage.setItem(AUTH_KEY, 'true');
 
-    // Al loguear, buscamos si tiene datos en la nube
-    const cloudUser = await PersistenceService.sync({ ...INITIAL_USER, email });
-    
-    // Si la nube devolvió algo diferente al inicial, lo usamos
-    if (cloudUser.email === email) {
-        setUser(cloudUser);
-    } else {
-        const newUser = { ...INITIAL_USER, email, username: email.split('@')[0] };
-        if (email.toLowerCase() === 'ed.sanhuezag@gmail.com') {
-            newUser.role = UserRole.ADMIN;
-            newUser.username = 'Ed Sanhueza';
-        }
-        setUser(newUser);
-        await PersistenceService.save(newUser);
+    try {
+      const cloudUser = await PersistenceService.sync({ ...INITIAL_USER, email });
+      if (cloudUser && cloudUser.email === email) {
+          setUser(cloudUser);
+      } else {
+          const newUser = { ...INITIAL_USER, email, username: email.split('@')[0] };
+          if (email.toLowerCase() === 'ed.sanhuezag@gmail.com') {
+              newUser.role = UserRole.ADMIN;
+              newUser.username = 'Ed Sanhueza';
+          }
+          setUser(newUser);
+          await PersistenceService.sync(newUser);
+      }
+      setIsAuthenticated(true);
+    } catch (e) {
+      alert("Error al conectar con la infraestructura. Verifica tu conexión.");
+    } finally {
+      isInitialized.current = true;
+      setLoading(false);
     }
-
-    setIsAuthenticated(true);
-    isInitialized.current = true;
-    setLoading(false);
   };
 
   const handleLogout = () => {
@@ -110,32 +118,37 @@ function App() {
       const currentLog = prev.dailyLogs.find(l => l.date === todayStr) || { date: todayStr, mealsEaten: [], cardioDone: false };
       const updatedLog: DailyLog = { ...currentLog, workoutCompletedId: session.id };
       const otherLogs = prev.dailyLogs.filter(l => l.date !== todayStr);
+      // Fix: syncTimestamp is now a valid property of the User type returned by the state update
       return {
         ...prev,
         history: [session, ...prev.history],
         currentXP: newXP,
         level: newLevel,
         badges: [...prev.badges, ...newBadges],
-        dailyLogs: [...otherLogs, updatedLog]
+        dailyLogs: [...otherLogs, updatedLog],
+        syncTimestamp: Date.now() // Forzamos actualización de timestamp
       };
     });
     setShowActiveWorkout(false);
     setActiveTab('dashboard');
   };
 
-  const handleUserUpdate = (updatedUser: User) => setUser(updatedUser);
+  const handleUserUpdate = (updatedUser: User) => {
+    // Fix: Updating user with current timestamp to trigger synchronization
+    setUser({ ...updatedUser, syncTimestamp: Date.now() });
+  };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
          <div className="relative mb-12">
-            <div className="absolute inset-0 bg-brand-500/20 blur-[120px] animate-pulse"></div>
-            <Dumbbell className="text-brand-500 relative z-10 animate-spin-slow" size={60} />
+            <div className="absolute inset-0 bg-brand-500/10 blur-[150px] animate-pulse"></div>
+            <HardDrive className="text-brand-500 relative z-10 animate-bounce" size={50} />
          </div>
-         <h1 className="text-3xl font-black text-white italic tracking-tighter mb-4">SINCRONIZANDO <span className="text-brand-500">NUBE</span></h1>
+         <h1 className="text-2xl font-black text-white italic tracking-tighter mb-4 uppercase">Sincronizando <span className="text-brand-500">Cloud</span></h1>
          <div className="flex items-center gap-3 bg-dark-900 border border-dark-800 px-6 py-3 rounded-2xl">
             <Loader2 size={16} className="animate-spin text-brand-500" />
-            <span className="text-[10px] text-white font-black uppercase tracking-widest">Descargando Perfil Maestro...</span>
+            <span className="text-[10px] text-white font-black uppercase tracking-widest">Handshake con musclepro.cl...</span>
          </div>
       </div>
     );
@@ -197,9 +210,8 @@ function App() {
                     {syncStatus === 'syncing' && <CloudLightning size={14} className="animate-pulse" />}
                     {syncStatus === 'error' && <CloudAlert size={14} />}
                     <span className="text-[9px] font-black uppercase tracking-widest">
-                      {syncStatus === 'synced' ? 'Nube Protegida' : 
-                       syncStatus === 'syncing' ? 'Sincronizando...' : 
-                       'Fallo de Red'}
+                      {PersistenceService.getConfig().type === 'IHOSTING' ? 'Cloud: iHosting Active' : 
+                       PersistenceService.getConfig().type === 'SUPABASE' ? 'Cloud: Supabase Active' : 'Cloud: Sandbox Active'}
                     </span>
                 </div>
 
@@ -214,7 +226,7 @@ function App() {
                     </div>
                 </div>
 
-                <button onClick={handleLogout} className="w-full mt-12 text-red-500 text-[10px] font-black py-4 rounded-xl transition-all uppercase tracking-[0.3em] border border-red-500/20 hover:bg-red-500/10 active:scale-95">
+                <button onClick={handleLogout} className="w-full mt-12 text-red-500 text-[10px] font-black py-4 rounded-xl transition-all uppercase tracking-[0.3em] border border-red-500/20 hover:bg-red-500/10 active:scale-[0.98]">
                     Cerrar Sesión
                 </button>
             </div>
@@ -223,17 +235,20 @@ function App() {
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <Database className="text-brand-500" size={20} />
-                        <h4 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Estado de Base de Datos</h4>
+                        <h4 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">System Infrastructure</h4>
                     </div>
                     <button 
                         onClick={async () => {
                             setSyncStatus('syncing');
-                            const synced = await PersistenceService.sync(user);
-                            setUser(synced);
-                            setSyncStatus('synced');
+                            try {
+                              const synced = await PersistenceService.sync(user);
+                              setUser(synced);
+                              setSyncStatus('synced');
+                            } catch (e) {
+                              setSyncStatus('error');
+                            }
                         }}
                         className="text-brand-500 p-2 hover:bg-brand-500/10 rounded-full transition-all"
-                        title="Forzar actualización desde nube"
                     >
                         <RefreshCw size={16} />
                     </button>
@@ -241,15 +256,15 @@ function App() {
                 
                 <div className="space-y-4">
                   <div className="bg-dark-950 p-5 rounded-2xl border border-dark-800 flex items-center justify-between">
-                      <div className="text-[9px] text-dark-500 uppercase font-black">ID en Servidor</div>
-                      <div className="text-xs text-white font-mono">
-                          {localStorage.getItem(`musclepro_v8_cloud_id_${user.email}`) || 'PENDIENTE'}
+                      <div className="text-[9px] text-dark-500 uppercase font-black">Database Node</div>
+                      <div className="text-[10px] text-white font-mono font-bold">
+                          {PersistenceService.getConfig().type}
                       </div>
                   </div>
                   <div className="bg-dark-950 p-5 rounded-2xl border border-dark-800 flex items-center justify-between">
-                      <div className="text-[9px] text-dark-500 uppercase font-black">Última Sincro</div>
-                      <div className="text-xs text-brand-500 font-bold uppercase">
-                          {new Date((user as any).syncTimestamp || Date.now()).toLocaleTimeString()}
+                      <div className="text-[9px] text-dark-500 uppercase font-black">Endpoint</div>
+                      <div className="text-[10px] text-brand-500 font-mono overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px]">
+                          {PersistenceService.getConfig().url || 'Default'}
                       </div>
                   </div>
                 </div>
@@ -257,7 +272,7 @@ function App() {
                 <div className="p-4 bg-brand-500/5 border border-brand-500/20 rounded-xl flex gap-3">
                     <ShieldCheck className="text-brand-500 shrink-0" size={18} />
                     <p className="text-[10px] text-dark-400 leading-relaxed italic">
-                        Protección activa: El sistema detecta automáticamente si hay una versión más nueva de tu perfil en otro dispositivo y te la entregará al iniciar.
+                        Infraestructura activa. Los cambios realizados se reflejarán instantáneamente en todos los dispositivos vinculados a esta cuenta.
                     </p>
                 </div>
             </div>
