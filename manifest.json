@@ -1,21 +1,18 @@
+
 {
   "short_name": "MUSCLEPRO",
-  "name": "MUSCLEPRO Training App",
+  "name": "MUSCLEPRO Elite Performance",
   "icons": [
     {
-      "src": "/assets/musclepro_logo.png",
+      "src": "https://raw.githubusercontent.com/lucide-react/lucide/main/icons/dumbbell.png",
       "type": "image/png",
-      "sizes": "192x192"
-    },
-    {
-      "src": "/assets/musclepro_logo.png",
-      "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
-  "theme_color": "#050505",
-  "background_color": "#050505",
+  "theme_color": "#0B0E11",
+  "background_color": "#0B0E11",
   "orientation": "portrait"
 }
