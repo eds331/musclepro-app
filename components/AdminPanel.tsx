@@ -1,283 +1,185 @@
+
 import React, { useState } from 'react';
-import { User, UserRole, Gender, Goal, ExperienceLevel, SubscriptionStatus } from '../types';
-import { Wand2, Users, Save, FileSpreadsheet, Upload, RefreshCw, PauseCircle, PlayCircle, AlertTriangle } from 'lucide-react';
-import { MOCK_EXERCISES_DB, INITIAL_USER } from '../services/mockData';
+import { User, Gender, Goal, ExperienceLevel, SubscriptionStatus } from '../types';
+import { Wand2, Users, Save, FileSpreadsheet, RefreshCw, Check, Loader2 } from 'lucide-react';
+import { INITIAL_USER } from '../services/mockData';
+import { generatePlan } from '../services/routineGenerator';
 
 interface AdminPanelProps {
-  user: User; // The admin
-  onUpdateUser: (updatedUser: User) => void; // To update the main app state
+  user: User;
+  onUpdateUser: (updatedUser: User) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onUpdateUser }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'create'>('create');
   
-  // Mock generation form
   const [formData, setFormData] = useState({
     name: '',
-    age: 25,
     gender: Gender.MALE,
     goal: Goal.HYPERTROPHY,
     level: ExperienceLevel.BEGINNER
   });
   
-  const [generatedPlan, setGeneratedPlan] = useState<any>(null);
-  
-  // User Management State
-  const [mockUsers, setMockUsers] = useState<User[]>([
-    user, // Include the current logged in user to demonstrate changes
-    {
-      ...INITIAL_USER,
-      id: 'u2',
-      username: 'ClienteDemo',
-      email: 'demo@test.com',
-      subscriptionStatus: SubscriptionStatus.PAUSED
-    },
-    {
-       ...INITIAL_USER,
-       id: 'u3',
-       username: 'NuevoIngreso',
-       email: 'nuevo@test.com',
-       subscriptionStatus: SubscriptionStatus.PAYMENT_PENDING
-    }
-  ]);
-  const [isUploading, setIsUploading] = useState(false);
+  const [generatedResult, setGeneratedResult] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [uploadMessage, setUploadMessage] = useState('');
+  const [syncSuccess, setSyncSuccess] = useState(false);
 
   const handleGenerate = () => {
-    // Simulate AI Generation logic
-    const plan = {
-      name: `Plan ${formData.goal} - ${formData.level}`,
-      description: 'Generado automáticamente por MUSCLEPRO AI',
-      split: formData.level === ExperienceLevel.ADVANCED ? 'Push/Pull/Legs' : 'Full Body',
-      exercises: MOCK_EXERCISES_DB.slice(0, 3) // Just a subset for demo
-    };
-    setGeneratedPlan(plan);
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      setIsUploading(true);
-      setUploadMessage('');
-
-      // Simulate Excel Parsing delay
-      setTimeout(() => {
-          setIsUploading(false);
-          setUploadMessage(`✅ Éxito: Se importaron 15 usuarios desde ${file.name}`);
-          // Mock adding users
-          const newMockUsers = [...mockUsers];
-          for(let i=0; i<3; i++) {
-              newMockUsers.push({
-                  ...INITIAL_USER,
-                  id: `bulk_${Date.now()}_${i}`,
-                  username: `UsuarioImportado_${i+1}`,
-                  email: `imported${i+1}@test.com`,
-                  subscriptionStatus: SubscriptionStatus.ACTIVE
-              });
-          }
-          setMockUsers(newMockUsers);
-      }, 2000);
+    const plan = generatePlan(formData.gender, formData.level, formData.goal);
+    setGeneratedResult(plan);
   };
 
   const handleSheetSync = () => {
       setIsSyncing(true);
+      setSyncSuccess(false);
+      
+      // Simulación de conexión con Google Sheets API
       setTimeout(() => {
           setIsSyncing(false);
-          setUploadMessage('✅ Sincronizado con Google Sheets: 3 suscripciones renovadas, 1 usuario nuevo.');
+          setSyncSuccess(true);
+          setTimeout(() => setSyncSuccess(false), 4000);
       }, 2500);
   };
 
-  const toggleSubscription = (targetUserId: string) => {
-      const updatedList = mockUsers.map(u => {
-          if (u.id === targetUserId) {
-              const newStatus = u.subscriptionStatus === SubscriptionStatus.ACTIVE 
-                ? SubscriptionStatus.PAUSED 
-                : SubscriptionStatus.ACTIVE;
-              
-              const updatedUser = { ...u, subscriptionStatus: newStatus };
-              
-              // If we modified the currently logged in user, update App state
-              if (u.id === user.id) {
-                  onUpdateUser(updatedUser);
-              }
-              return updatedUser;
-          }
-          return u;
-      });
-      setMockUsers(updatedList);
-  };
-
   return (
-    <div className="p-5 space-y-6 h-full flex flex-col">
-       <header>
-          <h1 className="text-2xl font-black text-white">PANEL ADMIN</h1>
-          <p className="text-brand-500 text-sm font-bold">STAFF ACCESS ONLY</p>
+    <div className="space-y-6 animate-fade-in">
+       <header className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">Admin Hub</h1>
+            <p className="text-brand-500 text-[10px] font-black tracking-[0.3em] uppercase">Control Maestro de Atletas</p>
+          </div>
+          <button 
+            onClick={handleSheetSync}
+            disabled={isSyncing}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                syncSuccess ? 'bg-success-500 text-black' : 'bg-white text-black hover:bg-brand-500'
+            }`}
+          >
+            {isSyncing ? <Loader2 size={16} className="animate-spin" /> : syncSuccess ? <Check size={16} /> : <FileSpreadsheet size={16} />}
+            {isSyncing ? 'SINCRONIZANDO...' : syncSuccess ? 'SINCRO EXITOSA' : 'SYNC GOOGLE SHEETS'}
+          </button>
         </header>
 
-        <div className="flex space-x-2 bg-dark-800 p-1 rounded-lg">
+        <div className="flex bg-dark-900 p-1.5 rounded-2xl border border-dark-800">
             <button 
                 onClick={() => setActiveTab('create')}
-                className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'create' ? 'bg-dark-700 text-white shadow shadow-black/50' : 'text-gray-500 hover:text-white'}`}
+                className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'create' ? 'bg-dark-800 text-white shadow-lg' : 'text-dark-500 hover:text-white'}`}
             >
-                <Wand2 size={16} className="inline mr-2" />
-                Generador
+                Generador de Protocolos
             </button>
              <button 
                 onClick={() => setActiveTab('users')}
-                className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-dark-700 text-white shadow shadow-black/50' : 'text-gray-500 hover:text-white'}`}
+                className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'users' ? 'bg-dark-800 text-white shadow-lg' : 'text-dark-500 hover:text-white'}`}
             >
-                <Users size={16} className="inline mr-2" />
-                Usuarios
+                Base de Datos Atletas
             </button>
         </div>
 
         {activeTab === 'create' && (
-            <div className="space-y-4 flex-1 overflow-y-auto">
-                <div className="bg-dark-800 p-4 rounded-xl border border-dark-700 space-y-4">
-                    <h3 className="font-bold text-gray-300">Datos del Cliente</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="bg-dark-900 border border-dark-800 p-8 rounded-[2rem] space-y-6 shadow-2xl">
+                    <h3 className="font-black text-white italic tracking-tighter uppercase text-xl">Configurar Perfil</h3>
                     
                     <div className="space-y-2">
-                        <label className="text-xs text-gray-500 uppercase">Nombre</label>
+                        <label className="text-[10px] text-dark-500 uppercase font-black tracking-widest">Nombre del Atleta</label>
                         <input 
                             value={formData.name}
                             onChange={(e) => setFormData({...formData, name: e.target.value})}
-                            className="w-full bg-dark-900 border border-dark-600 rounded p-2 text-white focus:border-brand-500 focus:outline-none" 
+                            placeholder="Ej. Juan Pérez"
+                            className="w-full bg-dark-950 border border-dark-800 rounded-xl p-4 text-white focus:border-brand-500 transition-all outline-none" 
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-xs text-gray-500 uppercase">Meta</label>
+                            <label className="text-[10px] text-dark-500 uppercase font-black tracking-widest">Género</label>
                             <select 
-                                value={formData.goal}
-                                onChange={(e) => setFormData({...formData, goal: e.target.value as Goal})}
-                                className="w-full bg-dark-900 border border-dark-600 rounded p-2 text-white text-sm focus:border-brand-500 focus:outline-none"
+                                value={formData.gender}
+                                onChange={(e) => setFormData({...formData, gender: e.target.value as Gender})}
+                                className="w-full bg-dark-950 border border-dark-800 rounded-xl p-4 text-white text-sm focus:border-brand-500 outline-none"
                             >
-                                {Object.values(Goal).map(g => <option key={g} value={g}>{g}</option>)}
+                                <option value={Gender.MALE}>Masculino</option>
+                                <option value={Gender.FEMALE}>Femenino</option>
                             </select>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs text-gray-500 uppercase">Nivel</label>
+                            <label className="text-[10px] text-dark-500 uppercase font-black tracking-widest">Nivel Experiencia</label>
                             <select 
                                 value={formData.level}
                                 onChange={(e) => setFormData({...formData, level: e.target.value as ExperienceLevel})}
-                                className="w-full bg-dark-900 border border-dark-600 rounded p-2 text-white text-sm focus:border-brand-500 focus:outline-none"
+                                className="w-full bg-dark-950 border border-dark-800 rounded-xl p-4 text-white text-sm focus:border-brand-500 outline-none"
                             >
-                                {Object.values(ExperienceLevel).map(l => <option key={l} value={l}>{l}</option>)}
+                                <option value={ExperienceLevel.BEGINNER}>Principiante (4d)</option>
+                                <option value={ExperienceLevel.INTERMEDIATE}>Intermedio (5d)</option>
+                                <option value={ExperienceLevel.ADVANCED}>Avanzado (6d)</option>
                             </select>
                         </div>
                     </div>
 
                     <button 
                         onClick={handleGenerate}
-                        className="w-full bg-brand-600 text-white font-bold py-3 rounded-lg hover:bg-brand-500 flex items-center justify-center gap-2 transition-colors shadow-lg shadow-brand-500/20"
+                        className="w-full bg-brand-600 text-black font-black py-5 rounded-2xl hover:bg-brand-500 flex items-center justify-center gap-3 transition-all shadow-xl shadow-brand-500/10 uppercase tracking-widest text-sm active:scale-95"
                     >
-                        <Wand2 size={18} />
-                        GENERAR PLAN AUTOMÁTICO
+                        <Wand2 size={20} />
+                        FORJAR PROTOCOLO
                     </button>
                 </div>
 
-                {generatedPlan && (
-                    <div className="bg-dark-800 p-4 rounded-xl border-l-4 border-green-500 animate-in fade-in slide-in-from-bottom-4">
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 className="font-bold text-white">{generatedPlan.name}</h3>
-                                <p className="text-xs text-gray-400">{generatedPlan.split}</p>
-                            </div>
-                            <button className="text-green-500 bg-green-500/10 p-2 rounded hover:bg-green-500/20">
-                                <Save size={18} />
-                            </button>
+                {generatedResult && (
+                    <div className="bg-dark-900 border border-dark-800 p-8 rounded-[2rem] relative animate-slide-up shadow-2xl overflow-hidden">
+                        <div className="absolute top-0 right-0 bg-brand-500 text-black font-black px-6 py-2 rounded-bl-2xl text-[10px] tracking-[0.2em] uppercase italic">
+                            Protocolo Generado
                         </div>
-                        <div className="space-y-2">
-                            {generatedPlan.exercises.map((ex: any, i: number) => (
-                                <div key={i} className="flex justify-between text-sm py-1 border-b border-dark-700 last:border-0">
-                                    <span>{ex.name}</span>
-                                    <span className="font-mono text-gray-500">{ex.sets} x {ex.reps}</span>
+                        <div className="mb-6">
+                            <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase mb-1">{generatedResult.name}</h3>
+                            <p className="text-dark-500 text-[10px] font-bold uppercase tracking-widest">{generatedResult.split}</p>
+                        </div>
+                        <div className="space-y-3 mb-8">
+                            {generatedResult.exercises.map((ex: any, i: number) => (
+                                <div key={i} className="flex justify-between items-center text-sm py-4 border-b border-dark-800/50 last:border-0">
+                                    <span className="text-gray-200 font-bold uppercase tracking-tighter">{ex.name}</span>
+                                    <span className="font-black text-brand-500 font-mono tracking-tighter">{ex.sets} x {ex.reps}</span>
                                 </div>
                             ))}
                         </div>
+                        <button className="w-full bg-white text-black font-black py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-brand-500 transition-all uppercase tracking-widest text-[10px]">
+                            <Save size={16} /> ASIGNAR A ATLETA
+                        </button>
                     </div>
                 )}
             </div>
         )}
 
         {activeTab === 'users' && (
-             <div className="flex-1 overflow-y-auto space-y-6">
-                 {/* Bulk Actions */}
-                 <div className="bg-dark-800 p-4 rounded-xl border border-dark-700 space-y-3">
-                     <h3 className="font-bold text-gray-300 flex items-center gap-2">
-                         <FileSpreadsheet size={18} className="text-green-500"/> Importación Masiva
-                     </h3>
-                     
-                     <div className="grid grid-cols-2 gap-3">
-                         <div className="relative group">
-                            <input 
-                                type="file" 
-                                accept=".xlsx, .xls, .csv" 
-                                onChange={handleFileUpload}
-                                className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                disabled={isUploading}
-                            />
-                            <div className={`border-2 border-dashed border-dark-600 rounded-lg p-3 text-center flex flex-col items-center justify-center h-full transition-colors ${isUploading ? 'bg-dark-700' : 'group-hover:border-brand-500 group-hover:bg-dark-700/50'}`}>
-                                <Upload size={20} className={`mb-1 ${isUploading ? 'animate-bounce text-brand-500' : 'text-gray-400'}`} />
-                                <span className="text-[10px] font-bold text-gray-400">
-                                    {isUploading ? 'Procesando...' : 'Subir Excel'}
-                                </span>
-                            </div>
-                         </div>
-
-                         <button 
-                            onClick={handleSheetSync}
-                            disabled={isSyncing}
-                            className="bg-green-900/10 border border-green-800 rounded-lg p-3 text-center flex flex-col items-center justify-center hover:bg-green-900/30 transition-colors"
-                         >
-                            <RefreshCw size={20} className={`mb-1 text-green-500 ${isSyncing ? 'animate-spin' : ''}`} />
-                            <span className="text-[10px] font-bold text-green-400">
-                                {isSyncing ? 'Sincronizando...' : 'Sync Google Sheets'}
-                            </span>
-                         </button>
-                     </div>
-                     {uploadMessage && (
-                         <div className="text-[10px] text-green-400 font-mono bg-green-900/20 p-2 rounded">
-                             {uploadMessage}
-                         </div>
-                     )}
-                 </div>
-
-                 {/* User List & Subscription Management */}
-                 <div className="space-y-3">
-                     <h3 className="font-bold text-gray-300">Gestión de Suscripciones</h3>
-                     {mockUsers.map(u => (
-                         <div key={u.id} className="bg-dark-800 p-3 rounded-xl border border-dark-700 flex justify-between items-center hover:bg-dark-700/50 transition-colors">
-                             <div>
-                                 <div className="font-bold text-sm flex items-center gap-2 text-white">
-                                     {u.username}
-                                     {u.id === user.id && <span className="text-[8px] bg-brand-600 px-1 rounded text-white">TÚ</span>}
-                                 </div>
-                                 <div className="text-xs text-gray-500">{u.email}</div>
-                                 <div className={`text-[10px] font-bold mt-1 inline-block px-1.5 py-0.5 rounded ${
-                                     u.subscriptionStatus === SubscriptionStatus.ACTIVE ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                                 }`}>
-                                     {u.subscriptionStatus}
-                                 </div>
-                             </div>
-                             <button 
-                                onClick={() => toggleSubscription(u.id)}
-                                className={`p-2 rounded-full transition-colors ${
-                                    u.subscriptionStatus === SubscriptionStatus.ACTIVE 
-                                    ? 'bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white'
-                                    : 'bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white'
-                                }`}
-                                title={u.subscriptionStatus === SubscriptionStatus.ACTIVE ? 'Pausar Suscripción' : 'Activar Suscripción'}
-                             >
-                                 {u.subscriptionStatus === SubscriptionStatus.ACTIVE ? <PauseCircle size={20} /> : <PlayCircle size={20} />}
-                             </button>
-                         </div>
-                     ))}
-                 </div>
-            </div>
+             <div className="bg-dark-900 border border-dark-800 rounded-[2rem] overflow-hidden">
+                  <table className="w-full text-left">
+                      <thead className="bg-dark-950/50 border-b border-dark-800">
+                          <tr>
+                              <th className="p-6 text-[10px] font-black uppercase text-dark-500 tracking-widest">Atleta</th>
+                              <th className="p-6 text-[10px] font-black uppercase text-dark-500 tracking-widest">Plan</th>
+                              <th className="p-6 text-[10px] font-black uppercase text-dark-500 tracking-widest">Estado</th>
+                              <th className="p-6 text-[10px] font-black uppercase text-dark-500 tracking-widest">Acción</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-dark-800/50">
+                          <tr className="hover:bg-dark-800/20 transition-colors">
+                              <td className="p-6">
+                                  <div className="font-bold text-white uppercase tracking-tighter">Ed Sanhueza</div>
+                                  <div className="text-[10px] text-dark-500">ed.sanhuezag@gmail.com</div>
+                              </td>
+                              <td className="p-6">
+                                  <span className="text-[10px] bg-dark-800 px-3 py-1 rounded-full text-white font-bold tracking-widest">HIPERTROFIA V2</span>
+                              </td>
+                              <td className="p-6">
+                                  <span className="text-[10px] text-success-500 font-black tracking-widest border border-success-500/20 px-2 py-1 rounded uppercase italic">ACTIVO</span>
+                              </td>
+                              <td className="p-6">
+                                  <button className="text-dark-500 hover:text-white transition-colors"><RefreshCw size={18} /></button>
+                              </td>
+                          </tr>
+                      </tbody>
+                  </table>
+             </div>
         )}
     </div>
   );
