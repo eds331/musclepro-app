@@ -11,8 +11,8 @@ import { INITIAL_USER } from './services/mockData';
 import { User, WorkoutSession, Badge, DailyLog } from './types';
 import { Dumbbell, Loader2 } from 'lucide-react';
 
-const STORAGE_KEY = 'musclepro_v2_clean';
-const AUTH_KEY = 'musclepro_v2_auth_clean';
+const STORAGE_KEY = 'musclepro_v3_master';
+const AUTH_KEY = 'musclepro_v3_auth';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -21,6 +21,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  // Cargar datos al iniciar
   useEffect(() => {
     const savedData = localStorage.getItem(STORAGE_KEY);
     const sessionActive = localStorage.getItem(AUTH_KEY);
@@ -38,10 +39,11 @@ function App() {
       setIsAuthenticated(true);
     }
 
-    const timer = setTimeout(() => setLoading(false), 1200);
+    const timer = setTimeout(() => setLoading(false), 1500);
     return () => clearTimeout(timer);
   }, []);
 
+  // Guardar datos en cada cambio de usuario (Persistencia Total)
   useEffect(() => {
     if (isAuthenticated) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
